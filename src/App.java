@@ -17,13 +17,13 @@ import java.sql.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Optional;
 
 /**
  * CORPORATE CAR RENTAL SYSTEM - FULL JDBC DATABASE UI
  * ----------------------------------------------------
- * This version connects to a real MySQL Database.
- * It automatically creates tables, loads data on startup,
- * and saves all additions/updates permanently.
+ * Includes Premium Dashboard, Full CRUD (Create, Read, Update, DELETE),
+ * strict Duplicate Validation checks, and synchronized UI models.
  */
 public class App extends Application {
 
@@ -56,7 +56,6 @@ public class App extends Application {
 
     @Override
     public void start(Stage primaryStage) {
-        // 1. Initialize DB and Load Real Data
         setupDatabaseTables();
         loadAllDataFromDB();
 
@@ -89,9 +88,9 @@ public class App extends Application {
     }
 
     private void setupDatabaseTables() {
-        String createCompany = "CREATE TABLE IF NOT EXISTS Company (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), contact VARCHAR(255), email VARCHAR(255), phone VARCHAR(50), address TEXT)";
-        String createCar = "CREATE TABLE IF NOT EXISTS Car (id INT AUTO_INCREMENT PRIMARY KEY, regNo VARCHAR(100), make VARCHAR(100), model VARCHAR(100), year VARCHAR(10), capacity VARCHAR(10), luggage VARCHAR(10), type VARCHAR(50), fuel VARCHAR(50), status VARCHAR(50))";
-        String createDriver = "CREATE TABLE IF NOT EXISTS Driver (id INT AUTO_INCREMENT PRIMARY KEY, firstName VARCHAR(100), lastName VARCHAR(100), phone VARCHAR(50), license VARCHAR(100), shift VARCHAR(50), status VARCHAR(50))";
+        String createCompany = "CREATE TABLE IF NOT EXISTS Company (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), contact VARCHAR(255), email VARCHAR(255) UNIQUE, phone VARCHAR(50), address TEXT)";
+        String createCar = "CREATE TABLE IF NOT EXISTS Car (id INT AUTO_INCREMENT PRIMARY KEY, regNo VARCHAR(100) UNIQUE, make VARCHAR(100), model VARCHAR(100), year VARCHAR(10), capacity VARCHAR(10), luggage VARCHAR(10), type VARCHAR(50), fuel VARCHAR(50), status VARCHAR(50))";
+        String createDriver = "CREATE TABLE IF NOT EXISTS Driver (id INT AUTO_INCREMENT PRIMARY KEY, firstName VARCHAR(100), lastName VARCHAR(100), phone VARCHAR(50), license VARCHAR(100) UNIQUE, shift VARCHAR(50), status VARCHAR(50))";
         String createBooking = "CREATE TABLE IF NOT EXISTS Booking (id INT AUTO_INCREMENT PRIMARY KEY, company VARCHAR(255), employee VARCHAR(255), serviceType VARCHAR(100), carRegNo VARCHAR(100), carType VARCHAR(50), fuelType VARCHAR(50), driver VARCHAR(150), pickup VARCHAR(255), dropLoc VARCHAR(255), date VARCHAR(50), time VARCHAR(50), status VARCHAR(50))";
         String createRateCard = "CREATE TABLE IF NOT EXISTS RateCard (id INT AUTO_INCREMENT PRIMARY KEY, company VARCHAR(255), serviceType VARCHAR(100), carType VARCHAR(50), fuelType VARCHAR(50), baseFare VARCHAR(50), inclKm VARCHAR(50), inclHrs VARCHAR(50), extraKmRate VARCHAR(50), extraHrRate VARCHAR(50))";
         String createInvoice = "CREATE TABLE IF NOT EXISTS Invoice (id INT AUTO_INCREMENT PRIMARY KEY, bookingRef VARCHAR(50), company VARCHAR(255), carRegNo VARCHAR(100), distance VARCHAR(50), hours VARCHAR(50), baseFare VARCHAR(50), distCharge VARCHAR(50), hrCharge VARCHAR(50), tolls VARCHAR(50), tax VARCHAR(50), total VARCHAR(50), payMode VARCHAR(50), status VARCHAR(50), date VARCHAR(100))";
@@ -284,17 +283,23 @@ public class App extends Application {
         
         Button addBtn = new Button("Add Company"); addBtn.getStyleClass().add("action-button");
         Button updateBtn = new Button("Update Record"); updateBtn.getStyleClass().add("update-button"); updateBtn.setDisable(true);
+        Button deleteBtn = new Button("Delete"); deleteBtn.getStyleClass().add("delete-button"); deleteBtn.setDisable(true);
         
         form.addRow(0, new Label("Name:"), nameIn, new Label("Contact:"), contactIn);
         form.addRow(1, new Label("Email:"), emailIn, new Label("Phone:"), phoneIn);
-        form.addRow(2, new Label("Address:"), addressIn, new HBox(10, addBtn, updateBtn));
+        form.addRow(2, new Label("Address:"), addressIn, new HBox(10, addBtn, updateBtn, deleteBtn));
 
         table.getSelectionModel().selectedItemProperty().addListener((obs, old, newSel) -> {
-            if(newSel != null) { nameIn.setText(newSel.getName()); contactIn.setText(newSel.getContact()); emailIn.setText(newSel.getEmail()); phoneIn.setText(newSel.getPhone()); addressIn.setText(newSel.getAddress()); updateBtn.setDisable(false); addBtn.setDisable(true); } 
-            else { updateBtn.setDisable(true); addBtn.setDisable(false); }
+            if(newSel != null) { 
+                nameIn.setText(newSel.getName()); contactIn.setText(newSel.getContact()); emailIn.setText(newSel.getEmail()); phoneIn.setText(newSel.getPhone()); addressIn.setText(newSel.getAddress()); 
+                updateBtn.setDisable(false); deleteBtn.setDisable(false); addBtn.setDisable(true); 
+            } else { updateBtn.setDisable(true); deleteBtn.setDisable(true); addBtn.setDisable(false); }
         });
 
         addBtn.setOnAction(e -> {
+            if (companyData.stream().anyMatch(c -> c.getEmail().equalsIgnoreCase(emailIn.getText()))) {
+                showAlert("Duplicate Error", "A company with this email already exists!"); return;
+            }
             try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Company (name, contact, email, phone, address) VALUES (?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
                 pstmt.setString(1, nameIn.getText()); pstmt.setString(2, contactIn.getText()); pstmt.setString(3, emailIn.getText()); pstmt.setString(4, phoneIn.getText()); pstmt.setString(5, addressIn.getText());
                 pstmt.executeUpdate();
@@ -310,7 +315,20 @@ public class App extends Application {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("UPDATE Company SET name=?, contact=?, email=?, phone=?, address=? WHERE id=?")) {
                     pstmt.setString(1, nameIn.getText()); pstmt.setString(2, contactIn.getText()); pstmt.setString(3, emailIn.getText()); pstmt.setString(4, phoneIn.getText()); pstmt.setString(5, addressIn.getText()); pstmt.setInt(6, Integer.parseInt(sel.getId()));
                     pstmt.executeUpdate();
-                    sel.setName(nameIn.getText()); sel.setContact(contactIn.getText()); sel.setEmail(emailIn.getText()); sel.setPhone(phoneIn.getText()); sel.setAddress(addressIn.getText()); table.refresh(); table.getSelectionModel().clearSelection();
+                    sel.setName(nameIn.getText()); sel.setContact(contactIn.getText()); sel.setEmail(emailIn.getText()); sel.setPhone(phoneIn.getText()); sel.setAddress(addressIn.getText()); 
+                    table.refresh(); table.getSelectionModel().clearSelection();
+                    nameIn.clear(); contactIn.clear(); emailIn.clear(); phoneIn.clear(); addressIn.clear();
+                } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
+            }
+        });
+        
+        deleteBtn.setOnAction(e -> {
+            Company sel = table.getSelectionModel().getSelectedItem();
+            if(sel != null && confirmDelete()) {
+                try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM Company WHERE id=?")) {
+                    pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate();
+                    companyData.remove(sel); table.getSelectionModel().clearSelection();
+                    nameIn.clear(); contactIn.clear(); emailIn.clear(); phoneIn.clear(); addressIn.clear();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
         });
@@ -333,23 +351,29 @@ public class App extends Application {
         
         Button addBtn = new Button("Add Vehicle"); addBtn.getStyleClass().add("action-button");
         Button updateBtn = new Button("Update Record"); updateBtn.getStyleClass().add("update-button"); updateBtn.setDisable(true);
+        Button deleteBtn = new Button("Delete"); deleteBtn.getStyleClass().add("delete-button"); deleteBtn.setDisable(true);
 
         form.addRow(0, new Label("Reg No:"), regIn, new Label("Make:"), makeIn, new Label("Model:"), modelIn);
         form.addRow(1, new Label("Year:"), yearIn, new Label("Seats:"), capIn, new Label("Luggage:"), lugIn);
         form.addRow(2, new Label("Type:"), typeIn, new Label("Fuel:"), fuelIn, new Label("Status:"), statusIn);
-        form.addRow(3, new Label(""), new HBox(10, addBtn, updateBtn));
+        form.addRow(3, new Label(""), new HBox(10, addBtn, updateBtn, deleteBtn));
 
         table.getSelectionModel().selectedItemProperty().addListener((obs, old, newSel) -> {
-            if(newSel != null) { regIn.setText(newSel.getRegNo()); makeIn.setText(newSel.getMake()); modelIn.setText(newSel.getModel()); yearIn.setText(newSel.getYear()); capIn.setText(newSel.getCapacity()); lugIn.setText(newSel.getLuggage()); typeIn.setValue(newSel.getType()); fuelIn.setValue(newSel.getFuel()); statusIn.setValue(newSel.getStatus()); updateBtn.setDisable(false); addBtn.setDisable(true); } 
-            else { updateBtn.setDisable(true); addBtn.setDisable(false); }
+            if(newSel != null) { 
+                regIn.setText(newSel.getRegNo()); makeIn.setText(newSel.getMake()); modelIn.setText(newSel.getModel()); yearIn.setText(newSel.getYear()); capIn.setText(newSel.getCapacity()); lugIn.setText(newSel.getLuggage()); typeIn.setValue(newSel.getType()); fuelIn.setValue(newSel.getFuel()); statusIn.setValue(newSel.getStatus()); 
+                updateBtn.setDisable(false); deleteBtn.setDisable(false); addBtn.setDisable(true); 
+            } else { updateBtn.setDisable(true); deleteBtn.setDisable(true); addBtn.setDisable(false); }
         });
 
         addBtn.setOnAction(e -> {
+            if (carData.stream().anyMatch(c -> c.getRegNo().equalsIgnoreCase(regIn.getText()))) {
+                showAlert("Duplicate Error", "A vehicle with Reg No " + regIn.getText() + " already exists!"); return;
+            }
             try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Car (regNo, make, model, year, capacity, luggage, type, fuel, status) VALUES (?,?,?,?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
-                pstmt.setString(1, regIn.getText()); pstmt.setString(2, makeIn.getText()); pstmt.setString(3, modelIn.getText()); pstmt.setString(4, yearIn.getText()); pstmt.setString(5, capIn.getText()); pstmt.setString(6, lugIn.getText()); pstmt.setString(7, typeIn.getValue()); pstmt.setString(8, fuelIn.getValue()); pstmt.setString(9, statusIn.getValue());
+                pstmt.setString(1, regIn.getText().toUpperCase()); pstmt.setString(2, makeIn.getText()); pstmt.setString(3, modelIn.getText()); pstmt.setString(4, yearIn.getText()); pstmt.setString(5, capIn.getText()); pstmt.setString(6, lugIn.getText()); pstmt.setString(7, typeIn.getValue()); pstmt.setString(8, fuelIn.getValue()); pstmt.setString(9, statusIn.getValue());
                 pstmt.executeUpdate(); ResultSet rs = pstmt.getGeneratedKeys();
-                if(rs.next()) carData.add(new Car(String.valueOf(rs.getInt(1)), regIn.getText(), makeIn.getText(), modelIn.getText(), yearIn.getText(), capIn.getText(), lugIn.getText(), typeIn.getValue(), fuelIn.getValue(), statusIn.getValue()));
-                regIn.clear(); makeIn.clear(); modelIn.clear();
+                if(rs.next()) carData.add(new Car(String.valueOf(rs.getInt(1)), regIn.getText().toUpperCase(), makeIn.getText(), modelIn.getText(), yearIn.getText(), capIn.getText(), lugIn.getText(), typeIn.getValue(), fuelIn.getValue(), statusIn.getValue()));
+                regIn.clear(); makeIn.clear(); modelIn.clear(); yearIn.clear(); capIn.clear(); lugIn.clear();
             } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
         });
 
@@ -357,8 +381,22 @@ public class App extends Application {
             Car sel = table.getSelectionModel().getSelectedItem();
             if(sel != null) {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("UPDATE Car SET regNo=?, make=?, model=?, year=?, capacity=?, luggage=?, type=?, fuel=?, status=? WHERE id=?")) {
-                    pstmt.setString(1, regIn.getText()); pstmt.setString(2, makeIn.getText()); pstmt.setString(3, modelIn.getText()); pstmt.setString(4, yearIn.getText()); pstmt.setString(5, capIn.getText()); pstmt.setString(6, lugIn.getText()); pstmt.setString(7, typeIn.getValue()); pstmt.setString(8, fuelIn.getValue()); pstmt.setString(9, statusIn.getValue()); pstmt.setInt(10, Integer.parseInt(sel.getId()));
-                    pstmt.executeUpdate(); sel.setRegNo(regIn.getText()); sel.setMake(makeIn.getText()); sel.setStatus(statusIn.getValue()); table.refresh(); table.getSelectionModel().clearSelection();
+                    pstmt.setString(1, regIn.getText().toUpperCase()); pstmt.setString(2, makeIn.getText()); pstmt.setString(3, modelIn.getText()); pstmt.setString(4, yearIn.getText()); pstmt.setString(5, capIn.getText()); pstmt.setString(6, lugIn.getText()); pstmt.setString(7, typeIn.getValue()); pstmt.setString(8, fuelIn.getValue()); pstmt.setString(9, statusIn.getValue()); pstmt.setInt(10, Integer.parseInt(sel.getId()));
+                    pstmt.executeUpdate(); 
+                    sel.setRegNo(regIn.getText().toUpperCase()); sel.setMake(makeIn.getText()); sel.setModel(modelIn.getText()); sel.setYear(yearIn.getText()); sel.setCapacity(capIn.getText()); sel.setLuggage(lugIn.getText()); sel.setType(typeIn.getValue()); sel.setFuel(fuelIn.getValue()); sel.setStatus(statusIn.getValue()); 
+                    table.refresh(); table.getSelectionModel().clearSelection();
+                    regIn.clear(); makeIn.clear(); modelIn.clear(); yearIn.clear(); capIn.clear(); lugIn.clear();
+                } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
+            }
+        });
+        
+        deleteBtn.setOnAction(e -> {
+            Car sel = table.getSelectionModel().getSelectedItem();
+            if(sel != null && confirmDelete()) {
+                try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM Car WHERE id=?")) {
+                    pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate();
+                    carData.remove(sel); table.getSelectionModel().clearSelection();
+                    regIn.clear(); makeIn.clear(); modelIn.clear(); yearIn.clear(); capIn.clear(); lugIn.clear();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
         });
@@ -379,18 +417,24 @@ public class App extends Application {
         ComboBox<String> statusIn = new ComboBox<>(FXCollections.observableArrayList("Active", "On Leave", "Suspended")); statusIn.setValue("Active");
         
         Button addBtn = new Button("Add Driver"); addBtn.getStyleClass().add("action-button");
-        Button updateBtn = new Button("Update"); updateBtn.getStyleClass().add("update-button"); updateBtn.setDisable(true);
+        Button updateBtn = new Button("Update Record"); updateBtn.getStyleClass().add("update-button"); updateBtn.setDisable(true);
+        Button deleteBtn = new Button("Delete"); deleteBtn.getStyleClass().add("delete-button"); deleteBtn.setDisable(true);
 
         form.addRow(0, new Label("First Name:"), fNameIn, new Label("Last Name:"), lNameIn, new Label("Shift:"), shiftIn);
         form.addRow(1, new Label("Phone:"), phoneIn, new Label("License:"), licIn, new Label("Status:"), statusIn);
-        form.addRow(2, new Label(""), new HBox(10, addBtn, updateBtn));
+        form.addRow(2, new Label(""), new HBox(10, addBtn, updateBtn, deleteBtn));
 
         table.getSelectionModel().selectedItemProperty().addListener((obs, old, newSel) -> {
-            if(newSel != null) { fNameIn.setText(newSel.getFirstName()); lNameIn.setText(newSel.getLastName()); phoneIn.setText(newSel.getPhone()); licIn.setText(newSel.getLicense()); shiftIn.setValue(newSel.getShift()); statusIn.setValue(newSel.getStatus()); updateBtn.setDisable(false); addBtn.setDisable(true); } 
-            else { updateBtn.setDisable(true); addBtn.setDisable(false); }
+            if(newSel != null) { 
+                fNameIn.setText(newSel.getFirstName()); lNameIn.setText(newSel.getLastName()); phoneIn.setText(newSel.getPhone()); licIn.setText(newSel.getLicense()); shiftIn.setValue(newSel.getShift()); statusIn.setValue(newSel.getStatus()); 
+                updateBtn.setDisable(false); deleteBtn.setDisable(false); addBtn.setDisable(true); 
+            } else { updateBtn.setDisable(true); deleteBtn.setDisable(true); addBtn.setDisable(false); }
         });
 
         addBtn.setOnAction(e -> {
+            if (driverData.stream().anyMatch(d -> d.getLicense().equalsIgnoreCase(licIn.getText()))) {
+                showAlert("Duplicate Error", "A driver with this License Number already exists!"); return;
+            }
             try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Driver (firstName, lastName, phone, license, shift, status) VALUES (?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
                 pstmt.setString(1, fNameIn.getText()); pstmt.setString(2, lNameIn.getText()); pstmt.setString(3, phoneIn.getText()); pstmt.setString(4, licIn.getText()); pstmt.setString(5, shiftIn.getValue()); pstmt.setString(6, statusIn.getValue());
                 pstmt.executeUpdate(); ResultSet rs = pstmt.getGeneratedKeys();
@@ -404,7 +448,21 @@ public class App extends Application {
             if(sel != null) {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("UPDATE Driver SET firstName=?, lastName=?, phone=?, license=?, shift=?, status=? WHERE id=?")) {
                     pstmt.setString(1, fNameIn.getText()); pstmt.setString(2, lNameIn.getText()); pstmt.setString(3, phoneIn.getText()); pstmt.setString(4, licIn.getText()); pstmt.setString(5, shiftIn.getValue()); pstmt.setString(6, statusIn.getValue()); pstmt.setInt(7, Integer.parseInt(sel.getId()));
-                    pstmt.executeUpdate(); sel.setFirstName(fNameIn.getText()); sel.setStatus(statusIn.getValue()); table.refresh(); table.getSelectionModel().clearSelection();
+                    pstmt.executeUpdate(); 
+                    sel.setFirstName(fNameIn.getText()); sel.setLastName(lNameIn.getText()); sel.setPhone(phoneIn.getText()); sel.setLicense(licIn.getText()); sel.setShift(shiftIn.getValue()); sel.setStatus(statusIn.getValue()); 
+                    table.refresh(); table.getSelectionModel().clearSelection();
+                    fNameIn.clear(); lNameIn.clear(); phoneIn.clear(); licIn.clear();
+                } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
+            }
+        });
+        
+        deleteBtn.setOnAction(e -> {
+            Driver sel = table.getSelectionModel().getSelectedItem();
+            if(sel != null && confirmDelete()) {
+                try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM Driver WHERE id=?")) {
+                    pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate();
+                    driverData.remove(sel); table.getSelectionModel().clearSelection();
+                    fNameIn.clear(); lNameIn.clear(); phoneIn.clear(); licIn.clear();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
         });
@@ -429,7 +487,8 @@ public class App extends Application {
         ComboBox<String> statusIn = new ComboBox<>(FXCollections.observableArrayList("Pending", "Confirmed", "Completed", "Cancelled")); statusIn.setValue("Pending");
         
         Button addBtn = new Button("Create Booking"); addBtn.getStyleClass().add("action-button");
-        Button updateBtn = new Button("Update"); updateBtn.getStyleClass().add("update-button"); updateBtn.setDisable(true);
+        Button updateBtn = new Button("Update Record"); updateBtn.getStyleClass().add("update-button"); updateBtn.setDisable(true);
+        Button deleteBtn = new Button("Delete"); deleteBtn.getStyleClass().add("delete-button"); deleteBtn.setDisable(true);
         
         dateIn.valueProperty().addListener((obs, old, newVal) -> refreshAvailableCars(newVal, carIn, null));
         carIn.valueProperty().addListener((obs, old, newVal) -> {
@@ -443,20 +502,23 @@ public class App extends Application {
         form.addRow(1, new Label("Service:"), serviceIn, new Label("Assign Car:"), carIn, new Label("Driver:"), driverIn);
         form.addRow(2, new Label("Car Type:"), typeIn, new Label("Fuel:"), fuelIn, new Label("Time:"), timeIn);
         form.addRow(3, new Label("Pickup:"), pickupIn, new Label("Drop:"), dropIn, new Label("Status:"), statusIn);
-        form.addRow(4, new Label(""), new HBox(10, addBtn, updateBtn));
+        form.addRow(4, new Label(""), new HBox(10, addBtn, updateBtn, deleteBtn));
 
         table.getSelectionModel().selectedItemProperty().addListener((obs, old, newSel) -> {
-            if(newSel != null) { compIn.setValue(newSel.getCompany()); empIn.setText(newSel.getEmployee()); serviceIn.setValue(newSel.getServiceType()); dateIn.setValue(LocalDate.parse(newSel.getDate())); refreshAvailableCars(dateIn.getValue(), carIn, newSel.getCarRegNo()); carIn.setValue(carData.stream().filter(c -> c.getRegNo().equals(newSel.getCarRegNo())).map(c -> c.getRegNo() + " - " + c.getMake()).findFirst().orElse("")); driverIn.setValue(newSel.getDriver()); pickupIn.setText(newSel.getPickup()); dropIn.setText(newSel.getDropLoc()); statusIn.setValue(newSel.getStatus()); updateBtn.setDisable(false); addBtn.setDisable(true); } 
-            else { updateBtn.setDisable(true); addBtn.setDisable(false); }
+            if(newSel != null) { 
+                compIn.setValue(newSel.getCompany()); empIn.setText(newSel.getEmployee()); serviceIn.setValue(newSel.getServiceType()); dateIn.setValue(LocalDate.parse(newSel.getDate())); refreshAvailableCars(dateIn.getValue(), carIn, newSel.getCarRegNo()); carIn.setValue(carData.stream().filter(c -> c.getRegNo().equals(newSel.getCarRegNo())).map(c -> c.getRegNo() + " - " + c.getMake()).findFirst().orElse("")); driverIn.setValue(newSel.getDriver()); pickupIn.setText(newSel.getPickup()); dropIn.setText(newSel.getDropLoc()); statusIn.setValue(newSel.getStatus()); timeIn.setText(newSel.getTime());
+                updateBtn.setDisable(false); deleteBtn.setDisable(false); addBtn.setDisable(true); 
+            } else { updateBtn.setDisable(true); deleteBtn.setDisable(true); addBtn.setDisable(false); }
         });
 
         addBtn.setOnAction(e -> {
             try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Booking (company, employee, serviceType, carRegNo, carType, fuelType, driver, pickup, dropLoc, date, time, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
-                String regNo = carIn.getValue().split(" - ")[0];
+                String regNo = carIn.getValue() != null ? carIn.getValue().split(" - ")[0] : "";
                 pstmt.setString(1, compIn.getValue()); pstmt.setString(2, empIn.getText()); pstmt.setString(3, serviceIn.getValue()); pstmt.setString(4, regNo); pstmt.setString(5, typeIn.getText()); pstmt.setString(6, fuelIn.getText()); pstmt.setString(7, driverIn.getValue()); pstmt.setString(8, pickupIn.getText()); pstmt.setString(9, dropIn.getText()); pstmt.setString(10, dateIn.getValue().toString()); pstmt.setString(11, timeIn.getText()); pstmt.setString(12, statusIn.getValue());
                 pstmt.executeUpdate(); ResultSet rs = pstmt.getGeneratedKeys();
                 if(rs.next()) bookingData.add(new Booking(String.valueOf(rs.getInt(1)), compIn.getValue(), empIn.getText(), serviceIn.getValue(), regNo, typeIn.getText(), fuelIn.getText(), driverIn.getValue(), pickupIn.getText(), dropIn.getText(), dateIn.getValue().toString(), timeIn.getText(), statusIn.getValue()));
-                syncAllCarStatuses(conn); refreshAvailableCars(dateIn.getValue(), carIn, null);
+                syncAllCarStatuses(conn); refreshAvailableCars(dateIn.getValue(), carIn, null); updateDashboardStats();
+                empIn.clear(); pickupIn.clear(); dropIn.clear();
             } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
         });
 
@@ -464,11 +526,25 @@ public class App extends Application {
             Booking sel = table.getSelectionModel().getSelectedItem();
             if(sel != null) {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("UPDATE Booking SET company=?, employee=?, serviceType=?, carRegNo=?, carType=?, fuelType=?, driver=?, pickup=?, dropLoc=?, date=?, time=?, status=? WHERE id=?")) {
-                    String regNo = carIn.getValue().split(" - ")[0];
+                    String regNo = carIn.getValue() != null ? carIn.getValue().split(" - ")[0] : "";
                     pstmt.setString(1, compIn.getValue()); pstmt.setString(2, empIn.getText()); pstmt.setString(3, serviceIn.getValue()); pstmt.setString(4, regNo); pstmt.setString(5, typeIn.getText()); pstmt.setString(6, fuelIn.getText()); pstmt.setString(7, driverIn.getValue()); pstmt.setString(8, pickupIn.getText()); pstmt.setString(9, dropIn.getText()); pstmt.setString(10, dateIn.getValue().toString()); pstmt.setString(11, timeIn.getText()); pstmt.setString(12, statusIn.getValue()); pstmt.setInt(13, Integer.parseInt(sel.getId()));
                     pstmt.executeUpdate();
-                    sel.setCompany(compIn.getValue()); sel.setStatus(statusIn.getValue()); table.refresh(); table.getSelectionModel().clearSelection();
-                    syncAllCarStatuses(conn); refreshAvailableCars(dateIn.getValue(), carIn, null);
+                    sel.setCompany(compIn.getValue()); sel.setEmployee(empIn.getText()); sel.setServiceType(serviceIn.getValue()); sel.setCarRegNo(regNo); sel.setCarType(typeIn.getText()); sel.setFuelType(fuelIn.getText()); sel.setDriver(driverIn.getValue()); sel.setPickup(pickupIn.getText()); sel.setDropLoc(dropIn.getText()); sel.setDate(dateIn.getValue().toString()); sel.setTime(timeIn.getText()); sel.setStatus(statusIn.getValue());
+                    table.refresh(); table.getSelectionModel().clearSelection();
+                    syncAllCarStatuses(conn); refreshAvailableCars(dateIn.getValue(), carIn, null); updateDashboardStats();
+                    empIn.clear(); pickupIn.clear(); dropIn.clear();
+                } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
+            }
+        });
+        
+        deleteBtn.setOnAction(e -> {
+            Booking sel = table.getSelectionModel().getSelectedItem();
+            if(sel != null && confirmDelete()) {
+                try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM Booking WHERE id=?")) {
+                    pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate();
+                    bookingData.remove(sel); table.getSelectionModel().clearSelection();
+                    syncAllCarStatuses(conn); refreshAvailableCars(dateIn.getValue(), carIn, null); updateDashboardStats();
+                    empIn.clear(); pickupIn.clear(); dropIn.clear();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
         });
@@ -512,16 +588,19 @@ public class App extends Application {
         TextField baseFareIn = new TextField(); TextField inclKmIn = new TextField(); TextField inclHrsIn = new TextField(); TextField perKmIn = new TextField(); TextField perHrIn = new TextField();
         
         Button addBtn = new Button("Add Rate Card"); addBtn.getStyleClass().add("action-button");
-        Button updateBtn = new Button("Update Rate"); updateBtn.getStyleClass().add("update-button"); updateBtn.setDisable(true);
+        Button updateBtn = new Button("Update Record"); updateBtn.getStyleClass().add("update-button"); updateBtn.setDisable(true);
+        Button deleteBtn = new Button("Delete"); deleteBtn.getStyleClass().add("delete-button"); deleteBtn.setDisable(true);
 
         form.addRow(0, new Label("Company:"), compIn, new Label("Service:"), serviceIn, new Label("Car Type:"), typeIn);
         form.addRow(1, new Label("Fuel Type:"), fuelIn, new Label("Base Fare:"), baseFareIn, new Label("Incl KM:"), inclKmIn);
         form.addRow(2, new Label("Incl Hrs:"), inclHrsIn, new Label("Extra KM:"), perKmIn, new Label("Extra Hr:"), perHrIn);
-        form.addRow(3, new Label(""), new HBox(10, addBtn, updateBtn));
+        form.addRow(3, new Label(""), new HBox(10, addBtn, updateBtn, deleteBtn));
 
         table.getSelectionModel().selectedItemProperty().addListener((obs, old, newSel) -> {
-            if(newSel != null) { compIn.setValue(newSel.getCompany()); serviceIn.setValue(newSel.getServiceType()); typeIn.setValue(newSel.getCarType()); fuelIn.setValue(newSel.getFuelType()); baseFareIn.setText(newSel.getBaseFare()); inclKmIn.setText(newSel.getInclKm()); inclHrsIn.setText(newSel.getInclHrs()); perKmIn.setText(newSel.getExtraKmRate()); perHrIn.setText(newSel.getExtraHrRate()); updateBtn.setDisable(false); addBtn.setDisable(true); } 
-            else { updateBtn.setDisable(true); addBtn.setDisable(false); }
+            if(newSel != null) { 
+                compIn.setValue(newSel.getCompany()); serviceIn.setValue(newSel.getServiceType()); typeIn.setValue(newSel.getCarType()); fuelIn.setValue(newSel.getFuelType()); baseFareIn.setText(newSel.getBaseFare()); inclKmIn.setText(newSel.getInclKm()); inclHrsIn.setText(newSel.getInclHrs()); perKmIn.setText(newSel.getExtraKmRate()); perHrIn.setText(newSel.getExtraHrRate()); 
+                updateBtn.setDisable(false); deleteBtn.setDisable(false); addBtn.setDisable(true); 
+            } else { updateBtn.setDisable(true); deleteBtn.setDisable(true); addBtn.setDisable(false); }
         });
 
         addBtn.setOnAction(e -> {
@@ -529,7 +608,7 @@ public class App extends Application {
                 pstmt.setString(1, compIn.getValue()); pstmt.setString(2, serviceIn.getValue()); pstmt.setString(3, typeIn.getValue()); pstmt.setString(4, fuelIn.getValue()); pstmt.setString(5, baseFareIn.getText()); pstmt.setString(6, inclKmIn.getText()); pstmt.setString(7, inclHrsIn.getText()); pstmt.setString(8, perKmIn.getText()); pstmt.setString(9, perHrIn.getText());
                 pstmt.executeUpdate(); ResultSet rs = pstmt.getGeneratedKeys();
                 if(rs.next()) rateCardData.add(new RateCard(String.valueOf(rs.getInt(1)), compIn.getValue(), serviceIn.getValue(), typeIn.getValue(), fuelIn.getValue(), baseFareIn.getText(), inclKmIn.getText(), inclHrsIn.getText(), perKmIn.getText(), perHrIn.getText()));
-                baseFareIn.clear();
+                baseFareIn.clear(); inclKmIn.clear(); inclHrsIn.clear(); perKmIn.clear(); perHrIn.clear();
             } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
         });
 
@@ -538,7 +617,21 @@ public class App extends Application {
             if(sel != null) {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("UPDATE RateCard SET company=?, serviceType=?, carType=?, fuelType=?, baseFare=?, inclKm=?, inclHrs=?, extraKmRate=?, extraHrRate=? WHERE id=?")) {
                     pstmt.setString(1, compIn.getValue()); pstmt.setString(2, serviceIn.getValue()); pstmt.setString(3, typeIn.getValue()); pstmt.setString(4, fuelIn.getValue()); pstmt.setString(5, baseFareIn.getText()); pstmt.setString(6, inclKmIn.getText()); pstmt.setString(7, inclHrsIn.getText()); pstmt.setString(8, perKmIn.getText()); pstmt.setString(9, perHrIn.getText()); pstmt.setInt(10, Integer.parseInt(sel.getId()));
-                    pstmt.executeUpdate(); sel.setBaseFare(baseFareIn.getText()); table.refresh(); table.getSelectionModel().clearSelection();
+                    pstmt.executeUpdate(); 
+                    sel.setCompany(compIn.getValue()); sel.setServiceType(serviceIn.getValue()); sel.setCarType(typeIn.getValue()); sel.setFuelType(fuelIn.getValue()); sel.setBaseFare(baseFareIn.getText()); sel.setInclKm(inclKmIn.getText()); sel.setInclHrs(inclHrsIn.getText()); sel.setExtraKmRate(perKmIn.getText()); sel.setExtraHrRate(perHrIn.getText());
+                    table.refresh(); table.getSelectionModel().clearSelection();
+                    baseFareIn.clear(); inclKmIn.clear(); inclHrsIn.clear(); perKmIn.clear(); perHrIn.clear();
+                } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
+            }
+        });
+        
+        deleteBtn.setOnAction(e -> {
+            RateCard sel = table.getSelectionModel().getSelectedItem();
+            if(sel != null && confirmDelete()) {
+                try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM RateCard WHERE id=?")) {
+                    pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate();
+                    rateCardData.remove(sel); table.getSelectionModel().clearSelection();
+                    baseFareIn.clear(); inclKmIn.clear(); inclHrsIn.clear(); perKmIn.clear(); perHrIn.clear();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
         });
@@ -550,7 +643,20 @@ public class App extends Application {
     private VBox createBillingView() {
         VBox layout = new VBox(15);
         TableView<Invoice> table = new TableView<>(invoiceData);
-        table.getColumns().addAll(createCol("Inv ID", "id", 50), createCol("BKG Ref", "bookingRef", 60), createCol("Company", "company", 130), createCol("KM", "distance", 50), createCol("Base", "baseFare", 60), createCol("Tolls", "tolls", 60), createCol("Total", "total", 90), createCol("Status", "status", 80));
+        table.getColumns().addAll(
+            createCol("Inv ID", "id", 50), 
+            createCol("BKG Ref", "bookingRef", 60), 
+            createCol("Company", "company", 130), 
+            createCol("KM", "distance", 50), 
+            createCol("Hrs", "hours", 50), 
+            createCol("Base", "baseFare", 60), 
+            createCol("Extra KM", "distCharge", 70), 
+            createCol("Extra Hr", "hrCharge", 70), 
+            createCol("Tolls", "tolls", 50), 
+            createCol("Tax", "tax", 50), 
+            createCol("Total", "total", 80), 
+            createCol("Status", "status", 70)
+        );
         VBox.setVgrow(table, Priority.ALWAYS);
 
         GridPane form = new GridPane(); form.setHgap(10); form.setVgap(10); form.setStyle("-fx-background-color: white; -fx-padding: 15; -fx-background-radius: 5;");
@@ -564,6 +670,7 @@ public class App extends Application {
         
         Button calcBtn = new Button("Generate Invoice"); calcBtn.setStyle("-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-weight: bold;");
         Button updateBtn = new Button("Update Invoice"); updateBtn.setStyle("-fx-background-color: #f39c12; -fx-text-fill: white; -fx-font-weight: bold;"); updateBtn.setDisable(true);
+        Button deleteBtn = new Button("Delete"); deleteBtn.getStyleClass().add("delete-button"); deleteBtn.setDisable(true);
 
         bkgIn.valueProperty().addListener((obs, old, newVal) -> {
             if(newVal != null) {
@@ -586,14 +693,14 @@ public class App extends Application {
                 bkgIn.getItems().stream().filter(item -> item.startsWith(newSel.getBookingRef())).findFirst().ifPresent(bkgIn::setValue);
                 distanceIn.setText(newSel.getDistance()); hoursIn.setText(newSel.getHours()); tollsIn.setText(newSel.getTolls());
                 payModeIn.setValue(newSel.getPayMode()); statusIn.setValue(newSel.getStatus());
-                updateBtn.setDisable(false); calcBtn.setDisable(true);
-            } else { updateBtn.setDisable(true); calcBtn.setDisable(false); }
+                updateBtn.setDisable(false); deleteBtn.setDisable(false); calcBtn.setDisable(true);
+            } else { updateBtn.setDisable(true); deleteBtn.setDisable(true); calcBtn.setDisable(false); }
         });
 
         form.addRow(0, new Label("Select BKG:"), bkgIn, new Label("Vehicle:"), carRegIn, new Label("Status:"), statusIn);
         form.addRow(1, new Label("KM Run:"), distanceIn, new Label("Hours:"), hoursIn, new Label("Tolls:"), tollsIn);
         form.addRow(2, new Label("Base Fare:"), baseFareIn, new Label("Tax Pct:"), taxPctIn, new Label("Pay Mode:"), payModeIn);
-        form.addRow(3, new Label("Extra KM Rate:"), extraKmRateIn, new Label("Extra Hr Rate:"), extraHrRateIn, new Label(""), new HBox(10, calcBtn, updateBtn));
+        form.addRow(3, new Label("Extra KM Rate:"), extraKmRateIn, new Label("Extra Hr Rate:"), extraHrRateIn, new Label(""), new HBox(10, calcBtn, updateBtn, deleteBtn));
 
         calcBtn.setOnAction(e -> {
             try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Invoice (bookingRef, company, carRegNo, distance, hours, baseFare, distCharge, hrCharge, tolls, tax, total, payMode, status, date) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
@@ -606,7 +713,7 @@ public class App extends Application {
                 pstmt.setString(1, bRef); pstmt.setString(2, comp); pstmt.setString(3, carRegIn.getText()); pstmt.setString(4, String.valueOf(dist)); pstmt.setString(5, String.valueOf(hrs)); pstmt.setString(6, String.format("%.2f", base)); pstmt.setString(7, String.format("%.2f", dChg)); pstmt.setString(8, String.format("%.2f", hChg)); pstmt.setString(9, String.format("%.2f", toll)); pstmt.setString(10, String.format("%.2f", tAmt)); pstmt.setString(11, String.format("%.2f", total)); pstmt.setString(12, payModeIn.getValue()); pstmt.setString(13, statusIn.getValue()); pstmt.setString(14, LocalDateTime.now().toString());
                 pstmt.executeUpdate(); ResultSet rs = pstmt.getGeneratedKeys();
                 if(rs.next()) invoiceData.add(new Invoice(String.valueOf(rs.getInt(1)), bRef, comp, carRegIn.getText(), String.valueOf(dist), String.valueOf(hrs), String.format("%.2f", base), String.format("%.2f", dChg), String.format("%.2f", hChg), String.format("%.2f", toll), String.format("%.2f", tAmt), String.format("%.2f", total), payModeIn.getValue(), statusIn.getValue(), ""));
-                updateDashboardStats(); distanceIn.clear(); tollsIn.setText("0.00");
+                updateDashboardStats(); distanceIn.clear(); hoursIn.clear(); tollsIn.setText("0.00");
                 showAlert("Success", "Invoice Saved to DB! Total: ₹" + String.format("%.2f", total));
             } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
         });
@@ -621,9 +728,21 @@ public class App extends Application {
                     
                     pstmt.setString(1, String.valueOf(dist)); pstmt.setString(2, String.valueOf(hrs)); pstmt.setString(3, String.format("%.2f", dChg)); pstmt.setString(4, String.format("%.2f", hChg)); pstmt.setString(5, String.format("%.2f", toll)); pstmt.setString(6, String.format("%.2f", tAmt)); pstmt.setString(7, String.format("%.2f", total)); pstmt.setString(8, payModeIn.getValue()); pstmt.setString(9, statusIn.getValue()); pstmt.setInt(10, Integer.parseInt(sel.getId()));
                     pstmt.executeUpdate();
-                    sel.setDistance(String.valueOf(dist)); sel.setTolls(String.format("%.2f", toll)); sel.setTotal(String.format("%.2f", total)); sel.setStatus(statusIn.getValue());
+                    sel.setDistance(String.valueOf(dist)); sel.setHours(String.valueOf(hrs)); sel.setTolls(String.format("%.2f", toll)); sel.setDistCharge(String.format("%.2f", dChg)); sel.setHrCharge(String.format("%.2f", hChg)); sel.setTax(String.format("%.2f", tAmt)); sel.setTotal(String.format("%.2f", total)); sel.setPayMode(payModeIn.getValue()); sel.setStatus(statusIn.getValue());
                     table.refresh(); table.getSelectionModel().clearSelection(); updateDashboardStats();
+                    distanceIn.clear(); hoursIn.clear(); tollsIn.setText("0.00");
                     showAlert("Success", "Invoice Updated in DB! New Total: ₹" + String.format("%.2f", total));
+                } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
+            }
+        });
+        
+        deleteBtn.setOnAction(e -> {
+            Invoice sel = table.getSelectionModel().getSelectedItem();
+            if(sel != null && confirmDelete()) {
+                try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM Invoice WHERE id=?")) {
+                    pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate();
+                    invoiceData.remove(sel); table.getSelectionModel().clearSelection(); updateDashboardStats();
+                    distanceIn.clear(); hoursIn.clear(); tollsIn.setText("0.00");
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
         });
@@ -638,6 +757,13 @@ public class App extends Application {
     private void showAlert(String title, String content) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION); alert.setTitle(title); alert.setHeaderText(null); alert.setContentText(content); alert.showAndWait();
     }
+    
+    private boolean confirmDelete() {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "Are you sure you want to delete this record?", ButtonType.YES, ButtonType.NO);
+        alert.setTitle("Confirm Deletion"); alert.setHeaderText(null);
+        Optional<ButtonType> result = alert.showAndWait();
+        return result.isPresent() && result.get() == ButtonType.YES;
+    }
 
     private double parseDoubleSafe(String val) { try { return (val==null || val.trim().isEmpty()) ? 0.0 : Double.parseDouble(val.trim()); } catch (Exception e) { return 0.0; } }
 
@@ -649,10 +775,9 @@ public class App extends Application {
         return "data:text/css," +
                ".table-view { -fx-background-color: transparent; -fx-border-color: #d2d6de; } .table-view .column-header-background { -fx-background-color: #e9ecef; } " +
                ".action-button { -fx-background-color: #2980b9; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand; } .action-button:hover { -fx-background-color: #3498db; } " +
-               ".update-button { -fx-background-color: #f39c12; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand; } .update-button:hover { -fx-background-color: #e67e22; }";
+               ".update-button { -fx-background-color: #f39c12; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand; } .update-button:hover { -fx-background-color: #e67e22; } " +
+               ".delete-button { -fx-background-color: #e74c3c; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand; } .delete-button:hover { -fx-background-color: #c0392b; }";
     }
-
-    private void seedMockData() { /* Now handled by database loading! */ }
 
     // =========================================================================
     // DATA MODELS
@@ -698,5 +823,6 @@ public class App extends Application {
         public Invoice(String id, String bookingRef, String company, String carRegNo, String distance, String hours, String baseFare, String distCharge, String hrCharge, String tolls, String tax, String total, String payMode, String status, String date) { this.id = new SimpleStringProperty(id); this.bookingRef = new SimpleStringProperty(bookingRef); this.company = new SimpleStringProperty(company); this.carRegNo = new SimpleStringProperty(carRegNo); this.distance = new SimpleStringProperty(distance); this.hours = new SimpleStringProperty(hours); this.baseFare = new SimpleStringProperty(baseFare); this.distCharge = new SimpleStringProperty(distCharge); this.hrCharge = new SimpleStringProperty(hrCharge); this.tolls = new SimpleStringProperty(tolls); this.tax = new SimpleStringProperty(tax); this.total = new SimpleStringProperty(total); this.payMode = new SimpleStringProperty(payMode); this.status = new SimpleStringProperty(status); this.date = new SimpleStringProperty(date); }
         public String getId() { return id.get(); } public String getBookingRef() { return bookingRef.get(); } public String getCompany() { return company.get(); } public String getCarRegNo() { return carRegNo.get(); } public String getDistance() { return distance.get(); } public String getHours() { return hours.get(); } public String getBaseFare() { return baseFare.get(); } public String getDistCharge() { return distCharge.get(); } public String getHrCharge() { return hrCharge.get(); } public String getTolls() { return tolls.get(); } public String getTax() { return tax.get(); } public String getTotal() { return total.get(); } public String getPayMode() { return payMode.get(); } public String getStatus() { return status.get(); } public String getDate() { return date.get(); }
         public void setDistance(String v) { distance.set(v); } public void setHours(String v) { hours.set(v); } public void setTolls(String v) { tolls.set(v); } public void setTotal(String v) { total.set(v); } public void setStatus(String v) { status.set(v); }
+        public void setDistCharge(String v) { distCharge.set(v); } public void setHrCharge(String v) { hrCharge.set(v); } public void setTax(String v) { tax.set(v); } public void setPayMode(String v) { payMode.set(v); }
     }
 }
