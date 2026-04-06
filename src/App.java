@@ -23,7 +23,8 @@ import java.util.Optional;
  * CORPORATE CAR RENTAL SYSTEM - FULL JDBC DATABASE UI
  * ----------------------------------------------------
  * Includes Premium Dashboard, Full CRUD (Create, Read, Update, DELETE),
- * strict Duplicate Validation checks, and synchronized UI models.
+ * strict Duplicate Validation checks, synchronized UI models, 
+ * an Auto-Seed Engine for testing, and Dynamic Auto-Sequencing to prevent ID gaps.
  */
 public class App extends Application {
 
@@ -80,7 +81,7 @@ public class App extends Application {
     }
 
     // =========================================================================
-    // 🗄️ DATABASE CONNECTION & SETUP METHODS
+    // 🗄️ DATABASE CONNECTION & SETUP METHODS (ALL 30 SCHEMA TABLES)
     // =========================================================================
 
     private Connection getConnection() throws SQLException {
@@ -88,20 +89,67 @@ public class App extends Application {
     }
 
     private void setupDatabaseTables() {
-        String createCompany = "CREATE TABLE IF NOT EXISTS Company (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), contact VARCHAR(255), email VARCHAR(255) UNIQUE, phone VARCHAR(50), address TEXT)";
-        String createCar = "CREATE TABLE IF NOT EXISTS Car (id INT AUTO_INCREMENT PRIMARY KEY, regNo VARCHAR(100) UNIQUE, make VARCHAR(100), model VARCHAR(100), year VARCHAR(10), capacity VARCHAR(10), luggage VARCHAR(10), type VARCHAR(50), fuel VARCHAR(50), status VARCHAR(50))";
-        String createDriver = "CREATE TABLE IF NOT EXISTS Driver (id INT AUTO_INCREMENT PRIMARY KEY, firstName VARCHAR(100), lastName VARCHAR(100), phone VARCHAR(50), license VARCHAR(100) UNIQUE, shift VARCHAR(50), status VARCHAR(50))";
-        String createBooking = "CREATE TABLE IF NOT EXISTS Booking (id INT AUTO_INCREMENT PRIMARY KEY, company VARCHAR(255), employee VARCHAR(255), serviceType VARCHAR(100), carRegNo VARCHAR(100), carType VARCHAR(50), fuelType VARCHAR(50), driver VARCHAR(150), pickup VARCHAR(255), dropLoc VARCHAR(255), date VARCHAR(50), time VARCHAR(50), status VARCHAR(50))";
-        String createRateCard = "CREATE TABLE IF NOT EXISTS RateCard (id INT AUTO_INCREMENT PRIMARY KEY, company VARCHAR(255), serviceType VARCHAR(100), carType VARCHAR(50), fuelType VARCHAR(50), baseFare VARCHAR(50), inclKm VARCHAR(50), inclHrs VARCHAR(50), extraKmRate VARCHAR(50), extraHrRate VARCHAR(50))";
-        String createInvoice = "CREATE TABLE IF NOT EXISTS Invoice (id INT AUTO_INCREMENT PRIMARY KEY, bookingRef VARCHAR(50), company VARCHAR(255), carRegNo VARCHAR(100), distance VARCHAR(50), hours VARCHAR(50), baseFare VARCHAR(50), distCharge VARCHAR(50), hrCharge VARCHAR(50), tolls VARCHAR(50), tax VARCHAR(50), total VARCHAR(50), payMode VARCHAR(50), status VARCHAR(50), date VARCHAR(100))";
+        // Array containing the Creation SQL for ALL 30 Tables from your core schema
+        String[] tables = {
+            "CREATE TABLE IF NOT EXISTS Company (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), contact VARCHAR(255), email VARCHAR(255) UNIQUE, phone VARCHAR(50), address TEXT)",
+            "CREATE TABLE IF NOT EXISTS Department (id INT AUTO_INCREMENT PRIMARY KEY, companyId INT, name VARCHAR(255))",
+            "CREATE TABLE IF NOT EXISTS Employee (id INT AUTO_INCREMENT PRIMARY KEY, companyId INT, name VARCHAR(255), email VARCHAR(255))",
+            "CREATE TABLE IF NOT EXISTS UserAccount (id INT AUTO_INCREMENT PRIMARY KEY, username VARCHAR(100), password VARCHAR(255), role VARCHAR(50))",
+            "CREATE TABLE IF NOT EXISTS CarType (id INT AUTO_INCREMENT PRIMARY KEY, typeName VARCHAR(100), capacity INT)",
+            "CREATE TABLE IF NOT EXISTS FuelType (id INT AUTO_INCREMENT PRIMARY KEY, fuelName VARCHAR(50))",
+            "CREATE TABLE IF NOT EXISTS Car (id INT AUTO_INCREMENT PRIMARY KEY, regNo VARCHAR(100) UNIQUE, make VARCHAR(100), model VARCHAR(100), year VARCHAR(10), capacity VARCHAR(10), luggage VARCHAR(10), type VARCHAR(50), fuel VARCHAR(50), status VARCHAR(50))",
+            "CREATE TABLE IF NOT EXISTS CarFeatures (id INT AUTO_INCREMENT PRIMARY KEY, carId INT, feature VARCHAR(255))",
+            "CREATE TABLE IF NOT EXISTS CarInsurance (id INT AUTO_INCREMENT PRIMARY KEY, carId INT, policyNo VARCHAR(100), expiry DATE)",
+            "CREATE TABLE IF NOT EXISTS CarDocuments (id INT AUTO_INCREMENT PRIMARY KEY, carId INT, docType VARCHAR(100), expiry DATE)",
+            "CREATE TABLE IF NOT EXISTS Driver (id INT AUTO_INCREMENT PRIMARY KEY, firstName VARCHAR(100), lastName VARCHAR(100), phone VARCHAR(50), license VARCHAR(100) UNIQUE, shift VARCHAR(50), status VARCHAR(50))",
+            "CREATE TABLE IF NOT EXISTS DriverDocuments (id INT AUTO_INCREMENT PRIMARY KEY, driverId INT, docType VARCHAR(100), expiry DATE)",
+            "CREATE TABLE IF NOT EXISTS DriverAttendance (id INT AUTO_INCREMENT PRIMARY KEY, driverId INT, date DATE, status VARCHAR(50))",
+            "CREATE TABLE IF NOT EXISTS DriverShift (id INT AUTO_INCREMENT PRIMARY KEY, shiftName VARCHAR(50), startTime VARCHAR(50), endTime VARCHAR(50))",
+            "CREATE TABLE IF NOT EXISTS DriverRating (id INT AUTO_INCREMENT PRIMARY KEY, driverId INT, rating INT, comments TEXT)",
+            "CREATE TABLE IF NOT EXISTS Location (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), address TEXT)",
+            "CREATE TABLE IF NOT EXISTS Route (id INT AUTO_INCREMENT PRIMARY KEY, startLocId INT, endLocId INT)",
+            "CREATE TABLE IF NOT EXISTS DistanceMatrix (id INT AUTO_INCREMENT PRIMARY KEY, startLocId INT, endLocId INT, distanceKM DECIMAL)",
+            "CREATE TABLE IF NOT EXISTS BookingStatus (id INT AUTO_INCREMENT PRIMARY KEY, statusName VARCHAR(50))",
+            "CREATE TABLE IF NOT EXISTS Booking (id INT AUTO_INCREMENT PRIMARY KEY, company VARCHAR(255), employee VARCHAR(255), serviceType VARCHAR(100), carRegNo VARCHAR(100), carType VARCHAR(50), fuelType VARCHAR(50), driver VARCHAR(150), pickup VARCHAR(255), dropLoc VARCHAR(255), date VARCHAR(50), time VARCHAR(50), status VARCHAR(50))",
+            "CREATE TABLE IF NOT EXISTS BookingHistory (id INT AUTO_INCREMENT PRIMARY KEY, bookingId INT, status VARCHAR(50), changeDate DATETIME)",
+            "CREATE TABLE IF NOT EXISTS Trip (id INT AUTO_INCREMENT PRIMARY KEY, bookingId INT, startMeter INT, endMeter INT, startTime DATETIME, endTime DATETIME)",
+            "CREATE TABLE IF NOT EXISTS RateCard (id INT AUTO_INCREMENT PRIMARY KEY, company VARCHAR(255), serviceType VARCHAR(100), carType VARCHAR(50), fuelType VARCHAR(50), baseFare VARCHAR(50), inclKm VARCHAR(50), inclHrs VARCHAR(50), extraKmRate VARCHAR(50), extraHrRate VARCHAR(50))",
+            "CREATE TABLE IF NOT EXISTS Tax (id INT AUTO_INCREMENT PRIMARY KEY, taxName VARCHAR(50), percentage DECIMAL)",
+            "CREATE TABLE IF NOT EXISTS Invoice (id INT AUTO_INCREMENT PRIMARY KEY, bookingRef VARCHAR(50), company VARCHAR(255), carRegNo VARCHAR(100), distance VARCHAR(50), hours VARCHAR(50), baseFare VARCHAR(50), distCharge VARCHAR(50), hrCharge VARCHAR(50), tolls VARCHAR(50), tax VARCHAR(50), total VARCHAR(50), payMode VARCHAR(50), status VARCHAR(50), date VARCHAR(100))",
+            "CREATE TABLE IF NOT EXISTS InvoiceDetails (id INT AUTO_INCREMENT PRIMARY KEY, invoiceId INT, description VARCHAR(255), amount DECIMAL)",
+            "CREATE TABLE IF NOT EXISTS Payment (id INT AUTO_INCREMENT PRIMARY KEY, invoiceId INT, amount DECIMAL, payMode VARCHAR(50), date DATETIME)",
+            "CREATE TABLE IF NOT EXISTS FuelLog (id INT AUTO_INCREMENT PRIMARY KEY, carId INT, liters DECIMAL, cost DECIMAL, date DATETIME)",
+            "CREATE TABLE IF NOT EXISTS Maintenance (id INT AUTO_INCREMENT PRIMARY KEY, carId INT, description TEXT, cost DECIMAL, date DATE)",
+            "CREATE TABLE IF NOT EXISTS BreakdownLog (id INT AUTO_INCREMENT PRIMARY KEY, carId INT, description TEXT, date DATETIME)"
+        };
 
         try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
-            stmt.execute(createCompany); stmt.execute(createCar); stmt.execute(createDriver);
-            stmt.execute(createBooking); stmt.execute(createRateCard); stmt.execute(createInvoice);
-            System.out.println("✅ Database tables verified/created successfully.");
+            for (String sql : tables) { stmt.execute(sql); }
+            System.out.println("✅ All 30 Database tables verified/created successfully.");
+            autoSeedDatabase();
         } catch (SQLException e) {
             showAlert("Database Connection Error", "Could not connect or create tables. Check MySQL credentials.\n" + e.getMessage());
         }
+    }
+    
+    // --- AUTOMATICALLY INSERTS TEST DATA IF DB IS EMPTY ---
+    private void autoSeedDatabase() {
+        try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
+            ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM Company");
+            rs.next();
+            if (rs.getInt(1) == 0) {
+                System.out.println("Empty database detected. Auto-seeding initial data...");
+                stmt.execute("INSERT INTO Company (name, contact, email, phone, address) VALUES ('TechCorp Global', 'John Doe', 'john@techcorp.com', '123-456-7890', '12 Silicon Blvd, NY')");
+                stmt.execute("INSERT INTO Company (name, contact, email, phone, address) VALUES ('Acme Industries', 'Jane Smith', 'jane@acme.com', '987-654-3210', '44 Factory Ln, NJ')");
+                stmt.execute("INSERT INTO Car (regNo, make, model, year, capacity, luggage, type, fuel, status) VALUES ('KA-01-AB-1234', 'Toyota', 'Innova Crysta', '2022', '7', '4', 'SUV', 'Diesel', 'Available')");
+                stmt.execute("INSERT INTO Car (regNo, make, model, year, capacity, luggage, type, fuel, status) VALUES ('MH-12-XY-9876', 'Honda', 'City', '2023', '5', '3', 'Sedan', 'Petrol', 'Available')");
+                stmt.execute("INSERT INTO Driver (firstName, lastName, phone, license, shift, status) VALUES ('Ramesh', 'Kumar', '9876543210', 'DL-123456', 'Morning', 'Active')");
+                stmt.execute("INSERT INTO Driver (firstName, lastName, phone, license, shift, status) VALUES ('Suresh', 'Singh', '9123456780', 'DL-654321', 'Night', 'Active')");
+                stmt.execute("INSERT INTO RateCard (company, serviceType, carType, fuelType, baseFare, inclKm, inclHrs, extraKmRate, extraHrRate) VALUES ('TechCorp Global', '8hrs - 80km', 'SUV', 'Diesel', '1800.00', '80', '8', '16.50', '150.00')");
+                stmt.execute("INSERT INTO RateCard (company, serviceType, carType, fuelType, baseFare, inclKm, inclHrs, extraKmRate, extraHrRate) VALUES ('TechCorp Global', 'Airport Transfer', 'Sedan', 'Petrol', '900.00', '40', '2', '11.50', '100.00')");
+                stmt.execute("INSERT INTO RateCard (company, serviceType, carType, fuelType, baseFare, inclKm, inclHrs, extraKmRate, extraHrRate) VALUES ('Acme Industries', 'Airport Transfer', 'Sedan', 'Petrol', '1200.00', '50', '3', '10.00', '120.00')");
+            }
+        } catch (Exception e) { System.out.println("Auto-seed skipped: " + e.getMessage()); }
     }
 
     private void loadAllDataFromDB() {
@@ -127,9 +175,34 @@ public class App extends Application {
             rs = stmt.executeQuery("SELECT * FROM Invoice");
             while(rs.next()) invoiceData.add(new Invoice(rs.getString("id"), rs.getString("bookingRef"), rs.getString("company"), rs.getString("carRegNo"), rs.getString("distance"), rs.getString("hours"), rs.getString("baseFare"), rs.getString("distCharge"), rs.getString("hrCharge"), rs.getString("tolls"), rs.getString("tax"), rs.getString("total"), rs.getString("payMode"), rs.getString("status"), rs.getString("date")));
 
-        } catch (SQLException e) {
-            e.printStackTrace();
+        } catch (SQLException e) { e.printStackTrace(); }
+    }
+    
+    // --- RESEQUENCES THE ENTIRE TABLE TO PREVENT ID GAPS ---
+    private void resequenceTable(String tableName) {
+        try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
+            stmt.execute("SET @count = 0");
+            stmt.execute("UPDATE " + tableName + " SET id = @count:= @count + 1");
+            stmt.execute("ALTER TABLE " + tableName + " AUTO_INCREMENT = 1");
+        } catch (SQLException ex) {
+            System.out.println("Resequence error: " + ex.getMessage());
         }
+        loadAllDataFromDB(); // Ensures UI immediately reflects the fixed Database IDs
+        updateDashboardStats();
+    }
+    
+    // --- COMPLETELY WIPES DB & RESETS IDs TO 1 ---
+    private void truncateAllTables() {
+        String[] tables = {"Company", "Department", "Employee", "UserAccount", "CarType", "FuelType", "Car", "CarFeatures", "CarInsurance", "CarDocuments", "Driver", "DriverDocuments", "DriverAttendance", "DriverShift", "DriverRating", "Location", "Route", "DistanceMatrix", "BookingStatus", "Booking", "BookingHistory", "Trip", "RateCard", "Tax", "Invoice", "InvoiceDetails", "Payment", "FuelLog", "Maintenance", "BreakdownLog"};
+        try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
+            stmt.execute("SET FOREIGN_KEY_CHECKS = 0");
+            for (String t : tables) { stmt.execute("TRUNCATE TABLE " + t); }
+            stmt.execute("SET FOREIGN_KEY_CHECKS = 1");
+            autoSeedDatabase();
+            loadAllDataFromDB();
+            updateDashboardStats();
+            showAlert("Reset Successful", "All tables wiped clean! The database has been reset and populated with default testing assets.");
+        } catch (SQLException ex) { showAlert("Reset Error", "Could not truncate tables: " + ex.getMessage()); }
     }
 
     private void updateDashboardStats() {
@@ -212,6 +285,7 @@ public class App extends Application {
         VBox layout = new VBox(25);
         layout.setPadding(new Insets(10));
 
+        HBox welcomeBoxWrapper = new HBox();
         VBox welcomeBox = new VBox(5);
         Label welcomeTitle = new Label("Welcome back, System Administrator 👋");
         welcomeTitle.setFont(Font.font("System", FontWeight.BOLD, 28));
@@ -220,6 +294,22 @@ public class App extends Application {
         welcomeSub.setFont(Font.font("System", FontWeight.NORMAL, 16));
         welcomeSub.setTextFill(Color.web("#7f8c8d"));
         welcomeBox.getChildren().addAll(welcomeTitle, welcomeSub);
+        
+        Region welcomeSpacer = new Region();
+        HBox.setHgrow(welcomeSpacer, Priority.ALWAYS);
+        
+        Button resetDbBtn = new Button("⚠ Reset Database (Testing)");
+        resetDbBtn.setStyle("-fx-background-color: #e74c3c; -fx-text-fill: white; -fx-font-weight: bold; -fx-cursor: hand;");
+        resetDbBtn.setOnAction(e -> {
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "WARNING: This will permanently wipe ALL testing data and reset all ID counters to 1. Are you sure?", ButtonType.YES, ButtonType.NO);
+            alert.showAndWait().ifPresent(res -> {
+                if (res == ButtonType.YES) {
+                    truncateAllTables();
+                }
+            });
+        });
+        
+        welcomeBoxWrapper.getChildren().addAll(welcomeBox, welcomeSpacer, resetDbBtn);
 
         HBox statsBox = new HBox(25);
         
@@ -252,7 +342,7 @@ public class App extends Application {
         recentTable.setStyle("-fx-effect: dropshadow(three-pass-box, rgba(0,0,0,0.05), 10, 0, 0, 5);");
         
         recentBox.getChildren().addAll(recentTitle, recentTable);
-        layout.getChildren().addAll(welcomeBox, statsBox, recentBox);
+        layout.getChildren().addAll(welcomeBoxWrapper, statsBox, recentBox);
         return layout;
     }
 
@@ -300,11 +390,10 @@ public class App extends Application {
             if (companyData.stream().anyMatch(c -> c.getEmail().equalsIgnoreCase(emailIn.getText()))) {
                 showAlert("Duplicate Error", "A company with this email already exists!"); return;
             }
-            try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Company (name, contact, email, phone, address) VALUES (?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
+            try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Company (name, contact, email, phone, address) VALUES (?,?,?,?,?)")) {
                 pstmt.setString(1, nameIn.getText()); pstmt.setString(2, contactIn.getText()); pstmt.setString(3, emailIn.getText()); pstmt.setString(4, phoneIn.getText()); pstmt.setString(5, addressIn.getText());
                 pstmt.executeUpdate();
-                ResultSet rs = pstmt.getGeneratedKeys();
-                if(rs.next()) companyData.add(new Company(String.valueOf(rs.getInt(1)), nameIn.getText(), contactIn.getText(), emailIn.getText(), phoneIn.getText(), addressIn.getText()));
+                resequenceTable("Company");
                 nameIn.clear(); contactIn.clear(); emailIn.clear(); phoneIn.clear(); addressIn.clear();
             } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
         });
@@ -312,11 +401,14 @@ public class App extends Application {
         updateBtn.setOnAction(e -> {
             Company sel = table.getSelectionModel().getSelectedItem();
             if(sel != null) {
+                if (companyData.stream().anyMatch(c -> c.getEmail().equalsIgnoreCase(emailIn.getText()) && !c.getId().equals(sel.getId()))) {
+                    showAlert("Duplicate Error", "Another company with this email already exists!"); return;
+                }
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("UPDATE Company SET name=?, contact=?, email=?, phone=?, address=? WHERE id=?")) {
                     pstmt.setString(1, nameIn.getText()); pstmt.setString(2, contactIn.getText()); pstmt.setString(3, emailIn.getText()); pstmt.setString(4, phoneIn.getText()); pstmt.setString(5, addressIn.getText()); pstmt.setInt(6, Integer.parseInt(sel.getId()));
                     pstmt.executeUpdate();
-                    sel.setName(nameIn.getText()); sel.setContact(contactIn.getText()); sel.setEmail(emailIn.getText()); sel.setPhone(phoneIn.getText()); sel.setAddress(addressIn.getText()); 
-                    table.refresh(); table.getSelectionModel().clearSelection();
+                    resequenceTable("Company");
+                    table.getSelectionModel().clearSelection();
                     nameIn.clear(); contactIn.clear(); emailIn.clear(); phoneIn.clear(); addressIn.clear();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
@@ -327,7 +419,8 @@ public class App extends Application {
             if(sel != null && confirmDelete()) {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM Company WHERE id=?")) {
                     pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate();
-                    companyData.remove(sel); table.getSelectionModel().clearSelection();
+                    resequenceTable("Company");
+                    table.getSelectionModel().clearSelection();
                     nameIn.clear(); contactIn.clear(); emailIn.clear(); phoneIn.clear(); addressIn.clear();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
@@ -369,10 +462,10 @@ public class App extends Application {
             if (carData.stream().anyMatch(c -> c.getRegNo().equalsIgnoreCase(regIn.getText()))) {
                 showAlert("Duplicate Error", "A vehicle with Reg No " + regIn.getText() + " already exists!"); return;
             }
-            try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Car (regNo, make, model, year, capacity, luggage, type, fuel, status) VALUES (?,?,?,?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
+            try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Car (regNo, make, model, year, capacity, luggage, type, fuel, status) VALUES (?,?,?,?,?,?,?,?,?)")) {
                 pstmt.setString(1, regIn.getText().toUpperCase()); pstmt.setString(2, makeIn.getText()); pstmt.setString(3, modelIn.getText()); pstmt.setString(4, yearIn.getText()); pstmt.setString(5, capIn.getText()); pstmt.setString(6, lugIn.getText()); pstmt.setString(7, typeIn.getValue()); pstmt.setString(8, fuelIn.getValue()); pstmt.setString(9, statusIn.getValue());
-                pstmt.executeUpdate(); ResultSet rs = pstmt.getGeneratedKeys();
-                if(rs.next()) carData.add(new Car(String.valueOf(rs.getInt(1)), regIn.getText().toUpperCase(), makeIn.getText(), modelIn.getText(), yearIn.getText(), capIn.getText(), lugIn.getText(), typeIn.getValue(), fuelIn.getValue(), statusIn.getValue()));
+                pstmt.executeUpdate();
+                resequenceTable("Car");
                 regIn.clear(); makeIn.clear(); modelIn.clear(); yearIn.clear(); capIn.clear(); lugIn.clear();
             } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
         });
@@ -380,11 +473,14 @@ public class App extends Application {
         updateBtn.setOnAction(e -> {
             Car sel = table.getSelectionModel().getSelectedItem();
             if(sel != null) {
+                if (carData.stream().anyMatch(c -> c.getRegNo().equalsIgnoreCase(regIn.getText()) && !c.getId().equals(sel.getId()))) {
+                    showAlert("Duplicate Error", "Another vehicle with Reg No " + regIn.getText() + " already exists!"); return;
+                }
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("UPDATE Car SET regNo=?, make=?, model=?, year=?, capacity=?, luggage=?, type=?, fuel=?, status=? WHERE id=?")) {
                     pstmt.setString(1, regIn.getText().toUpperCase()); pstmt.setString(2, makeIn.getText()); pstmt.setString(3, modelIn.getText()); pstmt.setString(4, yearIn.getText()); pstmt.setString(5, capIn.getText()); pstmt.setString(6, lugIn.getText()); pstmt.setString(7, typeIn.getValue()); pstmt.setString(8, fuelIn.getValue()); pstmt.setString(9, statusIn.getValue()); pstmt.setInt(10, Integer.parseInt(sel.getId()));
                     pstmt.executeUpdate(); 
-                    sel.setRegNo(regIn.getText().toUpperCase()); sel.setMake(makeIn.getText()); sel.setModel(modelIn.getText()); sel.setYear(yearIn.getText()); sel.setCapacity(capIn.getText()); sel.setLuggage(lugIn.getText()); sel.setType(typeIn.getValue()); sel.setFuel(fuelIn.getValue()); sel.setStatus(statusIn.getValue()); 
-                    table.refresh(); table.getSelectionModel().clearSelection();
+                    resequenceTable("Car");
+                    table.getSelectionModel().clearSelection();
                     regIn.clear(); makeIn.clear(); modelIn.clear(); yearIn.clear(); capIn.clear(); lugIn.clear();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
@@ -395,7 +491,8 @@ public class App extends Application {
             if(sel != null && confirmDelete()) {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM Car WHERE id=?")) {
                     pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate();
-                    carData.remove(sel); table.getSelectionModel().clearSelection();
+                    resequenceTable("Car");
+                    table.getSelectionModel().clearSelection();
                     regIn.clear(); makeIn.clear(); modelIn.clear(); yearIn.clear(); capIn.clear(); lugIn.clear();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
@@ -435,10 +532,10 @@ public class App extends Application {
             if (driverData.stream().anyMatch(d -> d.getLicense().equalsIgnoreCase(licIn.getText()))) {
                 showAlert("Duplicate Error", "A driver with this License Number already exists!"); return;
             }
-            try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Driver (firstName, lastName, phone, license, shift, status) VALUES (?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
+            try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Driver (firstName, lastName, phone, license, shift, status) VALUES (?,?,?,?,?,?)")) {
                 pstmt.setString(1, fNameIn.getText()); pstmt.setString(2, lNameIn.getText()); pstmt.setString(3, phoneIn.getText()); pstmt.setString(4, licIn.getText()); pstmt.setString(5, shiftIn.getValue()); pstmt.setString(6, statusIn.getValue());
-                pstmt.executeUpdate(); ResultSet rs = pstmt.getGeneratedKeys();
-                if(rs.next()) driverData.add(new Driver(String.valueOf(rs.getInt(1)), fNameIn.getText(), lNameIn.getText(), phoneIn.getText(), licIn.getText(), shiftIn.getValue(), statusIn.getValue()));
+                pstmt.executeUpdate(); 
+                resequenceTable("Driver");
                 fNameIn.clear(); lNameIn.clear(); phoneIn.clear(); licIn.clear();
             } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
         });
@@ -446,11 +543,14 @@ public class App extends Application {
         updateBtn.setOnAction(e -> {
             Driver sel = table.getSelectionModel().getSelectedItem();
             if(sel != null) {
+                if (driverData.stream().anyMatch(d -> d.getLicense().equalsIgnoreCase(licIn.getText()) && !d.getId().equals(sel.getId()))) {
+                    showAlert("Duplicate Error", "Another driver with this License Number already exists!"); return;
+                }
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("UPDATE Driver SET firstName=?, lastName=?, phone=?, license=?, shift=?, status=? WHERE id=?")) {
                     pstmt.setString(1, fNameIn.getText()); pstmt.setString(2, lNameIn.getText()); pstmt.setString(3, phoneIn.getText()); pstmt.setString(4, licIn.getText()); pstmt.setString(5, shiftIn.getValue()); pstmt.setString(6, statusIn.getValue()); pstmt.setInt(7, Integer.parseInt(sel.getId()));
                     pstmt.executeUpdate(); 
-                    sel.setFirstName(fNameIn.getText()); sel.setLastName(lNameIn.getText()); sel.setPhone(phoneIn.getText()); sel.setLicense(licIn.getText()); sel.setShift(shiftIn.getValue()); sel.setStatus(statusIn.getValue()); 
-                    table.refresh(); table.getSelectionModel().clearSelection();
+                    resequenceTable("Driver");
+                    table.getSelectionModel().clearSelection();
                     fNameIn.clear(); lNameIn.clear(); phoneIn.clear(); licIn.clear();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
@@ -461,7 +561,8 @@ public class App extends Application {
             if(sel != null && confirmDelete()) {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM Driver WHERE id=?")) {
                     pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate();
-                    driverData.remove(sel); table.getSelectionModel().clearSelection();
+                    resequenceTable("Driver");
+                    table.getSelectionModel().clearSelection();
                     fNameIn.clear(); lNameIn.clear(); phoneIn.clear(); licIn.clear();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
@@ -512,12 +613,13 @@ public class App extends Application {
         });
 
         addBtn.setOnAction(e -> {
-            try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Booking (company, employee, serviceType, carRegNo, carType, fuelType, driver, pickup, dropLoc, date, time, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
-                String regNo = carIn.getValue() != null ? carIn.getValue().split(" - ")[0] : "";
+            try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Booking (company, employee, serviceType, carRegNo, carType, fuelType, driver, pickup, dropLoc, date, time, status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")) {
+                String regNo = carIn.getValue() != null && !carIn.getValue().isEmpty() ? carIn.getValue().split(" - ")[0] : "";
                 pstmt.setString(1, compIn.getValue()); pstmt.setString(2, empIn.getText()); pstmt.setString(3, serviceIn.getValue()); pstmt.setString(4, regNo); pstmt.setString(5, typeIn.getText()); pstmt.setString(6, fuelIn.getText()); pstmt.setString(7, driverIn.getValue()); pstmt.setString(8, pickupIn.getText()); pstmt.setString(9, dropIn.getText()); pstmt.setString(10, dateIn.getValue().toString()); pstmt.setString(11, timeIn.getText()); pstmt.setString(12, statusIn.getValue());
-                pstmt.executeUpdate(); ResultSet rs = pstmt.getGeneratedKeys();
-                if(rs.next()) bookingData.add(new Booking(String.valueOf(rs.getInt(1)), compIn.getValue(), empIn.getText(), serviceIn.getValue(), regNo, typeIn.getText(), fuelIn.getText(), driverIn.getValue(), pickupIn.getText(), dropIn.getText(), dateIn.getValue().toString(), timeIn.getText(), statusIn.getValue()));
-                syncAllCarStatuses(conn); refreshAvailableCars(dateIn.getValue(), carIn, null); updateDashboardStats();
+                pstmt.executeUpdate(); 
+                syncAllCarStatuses(conn); 
+                resequenceTable("Booking");
+                refreshAvailableCars(dateIn.getValue(), carIn, null);
                 empIn.clear(); pickupIn.clear(); dropIn.clear();
             } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
         });
@@ -526,12 +628,13 @@ public class App extends Application {
             Booking sel = table.getSelectionModel().getSelectedItem();
             if(sel != null) {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("UPDATE Booking SET company=?, employee=?, serviceType=?, carRegNo=?, carType=?, fuelType=?, driver=?, pickup=?, dropLoc=?, date=?, time=?, status=? WHERE id=?")) {
-                    String regNo = carIn.getValue() != null ? carIn.getValue().split(" - ")[0] : "";
+                    String regNo = carIn.getValue() != null && !carIn.getValue().isEmpty() ? carIn.getValue().split(" - ")[0] : "";
                     pstmt.setString(1, compIn.getValue()); pstmt.setString(2, empIn.getText()); pstmt.setString(3, serviceIn.getValue()); pstmt.setString(4, regNo); pstmt.setString(5, typeIn.getText()); pstmt.setString(6, fuelIn.getText()); pstmt.setString(7, driverIn.getValue()); pstmt.setString(8, pickupIn.getText()); pstmt.setString(9, dropIn.getText()); pstmt.setString(10, dateIn.getValue().toString()); pstmt.setString(11, timeIn.getText()); pstmt.setString(12, statusIn.getValue()); pstmt.setInt(13, Integer.parseInt(sel.getId()));
                     pstmt.executeUpdate();
-                    sel.setCompany(compIn.getValue()); sel.setEmployee(empIn.getText()); sel.setServiceType(serviceIn.getValue()); sel.setCarRegNo(regNo); sel.setCarType(typeIn.getText()); sel.setFuelType(fuelIn.getText()); sel.setDriver(driverIn.getValue()); sel.setPickup(pickupIn.getText()); sel.setDropLoc(dropIn.getText()); sel.setDate(dateIn.getValue().toString()); sel.setTime(timeIn.getText()); sel.setStatus(statusIn.getValue());
-                    table.refresh(); table.getSelectionModel().clearSelection();
-                    syncAllCarStatuses(conn); refreshAvailableCars(dateIn.getValue(), carIn, null); updateDashboardStats();
+                    syncAllCarStatuses(conn); 
+                    resequenceTable("Booking");
+                    table.getSelectionModel().clearSelection();
+                    refreshAvailableCars(dateIn.getValue(), carIn, null);
                     empIn.clear(); pickupIn.clear(); dropIn.clear();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
@@ -542,8 +645,10 @@ public class App extends Application {
             if(sel != null && confirmDelete()) {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM Booking WHERE id=?")) {
                     pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate();
-                    bookingData.remove(sel); table.getSelectionModel().clearSelection();
-                    syncAllCarStatuses(conn); refreshAvailableCars(dateIn.getValue(), carIn, null); updateDashboardStats();
+                    syncAllCarStatuses(conn);
+                    resequenceTable("Booking");
+                    table.getSelectionModel().clearSelection();
+                    refreshAvailableCars(dateIn.getValue(), carIn, null); 
                     empIn.clear(); pickupIn.clear(); dropIn.clear();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
@@ -604,10 +709,10 @@ public class App extends Application {
         });
 
         addBtn.setOnAction(e -> {
-            try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO RateCard (company, serviceType, carType, fuelType, baseFare, inclKm, inclHrs, extraKmRate, extraHrRate) VALUES (?,?,?,?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
+            try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO RateCard (company, serviceType, carType, fuelType, baseFare, inclKm, inclHrs, extraKmRate, extraHrRate) VALUES (?,?,?,?,?,?,?,?,?)")) {
                 pstmt.setString(1, compIn.getValue()); pstmt.setString(2, serviceIn.getValue()); pstmt.setString(3, typeIn.getValue()); pstmt.setString(4, fuelIn.getValue()); pstmt.setString(5, baseFareIn.getText()); pstmt.setString(6, inclKmIn.getText()); pstmt.setString(7, inclHrsIn.getText()); pstmt.setString(8, perKmIn.getText()); pstmt.setString(9, perHrIn.getText());
-                pstmt.executeUpdate(); ResultSet rs = pstmt.getGeneratedKeys();
-                if(rs.next()) rateCardData.add(new RateCard(String.valueOf(rs.getInt(1)), compIn.getValue(), serviceIn.getValue(), typeIn.getValue(), fuelIn.getValue(), baseFareIn.getText(), inclKmIn.getText(), inclHrsIn.getText(), perKmIn.getText(), perHrIn.getText()));
+                pstmt.executeUpdate(); 
+                resequenceTable("RateCard");
                 baseFareIn.clear(); inclKmIn.clear(); inclHrsIn.clear(); perKmIn.clear(); perHrIn.clear();
             } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
         });
@@ -618,8 +723,8 @@ public class App extends Application {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("UPDATE RateCard SET company=?, serviceType=?, carType=?, fuelType=?, baseFare=?, inclKm=?, inclHrs=?, extraKmRate=?, extraHrRate=? WHERE id=?")) {
                     pstmt.setString(1, compIn.getValue()); pstmt.setString(2, serviceIn.getValue()); pstmt.setString(3, typeIn.getValue()); pstmt.setString(4, fuelIn.getValue()); pstmt.setString(5, baseFareIn.getText()); pstmt.setString(6, inclKmIn.getText()); pstmt.setString(7, inclHrsIn.getText()); pstmt.setString(8, perKmIn.getText()); pstmt.setString(9, perHrIn.getText()); pstmt.setInt(10, Integer.parseInt(sel.getId()));
                     pstmt.executeUpdate(); 
-                    sel.setCompany(compIn.getValue()); sel.setServiceType(serviceIn.getValue()); sel.setCarType(typeIn.getValue()); sel.setFuelType(fuelIn.getValue()); sel.setBaseFare(baseFareIn.getText()); sel.setInclKm(inclKmIn.getText()); sel.setInclHrs(inclHrsIn.getText()); sel.setExtraKmRate(perKmIn.getText()); sel.setExtraHrRate(perHrIn.getText());
-                    table.refresh(); table.getSelectionModel().clearSelection();
+                    resequenceTable("RateCard");
+                    table.getSelectionModel().clearSelection();
                     baseFareIn.clear(); inclKmIn.clear(); inclHrsIn.clear(); perKmIn.clear(); perHrIn.clear();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
@@ -630,7 +735,8 @@ public class App extends Application {
             if(sel != null && confirmDelete()) {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM RateCard WHERE id=?")) {
                     pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate();
-                    rateCardData.remove(sel); table.getSelectionModel().clearSelection();
+                    resequenceTable("RateCard");
+                    table.getSelectionModel().clearSelection();
                     baseFareIn.clear(); inclKmIn.clear(); inclHrsIn.clear(); perKmIn.clear(); perHrIn.clear();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
@@ -703,7 +809,7 @@ public class App extends Application {
         form.addRow(3, new Label("Extra KM Rate:"), extraKmRateIn, new Label("Extra Hr Rate:"), extraHrRateIn, new Label(""), new HBox(10, calcBtn, updateBtn, deleteBtn));
 
         calcBtn.setOnAction(e -> {
-            try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Invoice (bookingRef, company, carRegNo, distance, hours, baseFare, distCharge, hrCharge, tolls, tax, total, payMode, status, date) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
+            try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Invoice (bookingRef, company, carRegNo, distance, hours, baseFare, distCharge, hrCharge, tolls, tax, total, payMode, status, date) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")) {
                 String bRef = bkgIn.getValue().split(" - ")[0]; String comp = bkgIn.getValue().split(" - ")[1];
                 double dist = parseDoubleSafe(distanceIn.getText()), hrs = parseDoubleSafe(hoursIn.getText()), base = parseDoubleSafe(baseFareIn.getText()), eKm = parseDoubleSafe(extraKmRateIn.getText()), eHr = parseDoubleSafe(extraHrRateIn.getText()), toll = parseDoubleSafe(tollsIn.getText()), tx = parseDoubleSafe(taxPctIn.getText());
                 double dChg = Math.max(0, dist - parseDoubleSafe(inclKmIn.getText())) * eKm;
@@ -711,9 +817,9 @@ public class App extends Application {
                 double sub = base + dChg + hChg + toll; double tAmt = sub * (tx/100); double total = sub + tAmt;
                 
                 pstmt.setString(1, bRef); pstmt.setString(2, comp); pstmt.setString(3, carRegIn.getText()); pstmt.setString(4, String.valueOf(dist)); pstmt.setString(5, String.valueOf(hrs)); pstmt.setString(6, String.format("%.2f", base)); pstmt.setString(7, String.format("%.2f", dChg)); pstmt.setString(8, String.format("%.2f", hChg)); pstmt.setString(9, String.format("%.2f", toll)); pstmt.setString(10, String.format("%.2f", tAmt)); pstmt.setString(11, String.format("%.2f", total)); pstmt.setString(12, payModeIn.getValue()); pstmt.setString(13, statusIn.getValue()); pstmt.setString(14, LocalDateTime.now().toString());
-                pstmt.executeUpdate(); ResultSet rs = pstmt.getGeneratedKeys();
-                if(rs.next()) invoiceData.add(new Invoice(String.valueOf(rs.getInt(1)), bRef, comp, carRegIn.getText(), String.valueOf(dist), String.valueOf(hrs), String.format("%.2f", base), String.format("%.2f", dChg), String.format("%.2f", hChg), String.format("%.2f", toll), String.format("%.2f", tAmt), String.format("%.2f", total), payModeIn.getValue(), statusIn.getValue(), ""));
-                updateDashboardStats(); distanceIn.clear(); hoursIn.clear(); tollsIn.setText("0.00");
+                pstmt.executeUpdate(); 
+                resequenceTable("Invoice");
+                distanceIn.clear(); hoursIn.clear(); tollsIn.setText("0.00");
                 showAlert("Success", "Invoice Saved to DB! Total: ₹" + String.format("%.2f", total));
             } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
         });
@@ -728,8 +834,8 @@ public class App extends Application {
                     
                     pstmt.setString(1, String.valueOf(dist)); pstmt.setString(2, String.valueOf(hrs)); pstmt.setString(3, String.format("%.2f", dChg)); pstmt.setString(4, String.format("%.2f", hChg)); pstmt.setString(5, String.format("%.2f", toll)); pstmt.setString(6, String.format("%.2f", tAmt)); pstmt.setString(7, String.format("%.2f", total)); pstmt.setString(8, payModeIn.getValue()); pstmt.setString(9, statusIn.getValue()); pstmt.setInt(10, Integer.parseInt(sel.getId()));
                     pstmt.executeUpdate();
-                    sel.setDistance(String.valueOf(dist)); sel.setHours(String.valueOf(hrs)); sel.setTolls(String.format("%.2f", toll)); sel.setDistCharge(String.format("%.2f", dChg)); sel.setHrCharge(String.format("%.2f", hChg)); sel.setTax(String.format("%.2f", tAmt)); sel.setTotal(String.format("%.2f", total)); sel.setPayMode(payModeIn.getValue()); sel.setStatus(statusIn.getValue());
-                    table.refresh(); table.getSelectionModel().clearSelection(); updateDashboardStats();
+                    resequenceTable("Invoice");
+                    table.getSelectionModel().clearSelection(); 
                     distanceIn.clear(); hoursIn.clear(); tollsIn.setText("0.00");
                     showAlert("Success", "Invoice Updated in DB! New Total: ₹" + String.format("%.2f", total));
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
@@ -741,7 +847,8 @@ public class App extends Application {
             if(sel != null && confirmDelete()) {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM Invoice WHERE id=?")) {
                     pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate();
-                    invoiceData.remove(sel); table.getSelectionModel().clearSelection(); updateDashboardStats();
+                    resequenceTable("Invoice");
+                    table.getSelectionModel().clearSelection(); 
                     distanceIn.clear(); hoursIn.clear(); tollsIn.setText("0.00");
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
