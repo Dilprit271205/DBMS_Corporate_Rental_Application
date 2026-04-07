@@ -119,47 +119,51 @@ public class App extends Application {
                 System.out.println("✅ Outdated tables dropped successfully.");
             }
 
+            // Using SET FOREIGN_KEY_CHECKS = 0 to allow table creation in any order without reference errors
+            stmt.execute("SET FOREIGN_KEY_CHECKS = 0");
+
             String[] tables = {
-                "CREATE TABLE IF NOT EXISTS Company (CompanyID INT AUTO_INCREMENT PRIMARY KEY, CompanyName VARCHAR(255), ContactPerson VARCHAR(255), ContactEmail VARCHAR(255) UNIQUE, ContactPhone VARCHAR(50), BillingAddress TEXT)",
-                "CREATE TABLE IF NOT EXISTS Department (DepartmentID INT AUTO_INCREMENT PRIMARY KEY, CompanyID INT, DepartmentName VARCHAR(255))",
-                "CREATE TABLE IF NOT EXISTS Employee (EmployeeID INT AUTO_INCREMENT PRIMARY KEY, CompanyID INT, DepartmentID INT, FirstName VARCHAR(100), LastName VARCHAR(100), Email VARCHAR(255))",
-                "CREATE TABLE IF NOT EXISTS UserAccount (UserID INT AUTO_INCREMENT PRIMARY KEY, EmployeeID INT, Username VARCHAR(100), PasswordHash VARCHAR(255), Role VARCHAR(50))",
+                "CREATE TABLE IF NOT EXISTS Company (CompanyID INT AUTO_INCREMENT PRIMARY KEY, CompanyName VARCHAR(255) NOT NULL, ContactPerson VARCHAR(255), ContactEmail VARCHAR(255) UNIQUE, ContactPhone VARCHAR(50), BillingAddress TEXT)",
+                "CREATE TABLE IF NOT EXISTS Department (DepartmentID INT AUTO_INCREMENT PRIMARY KEY, CompanyID INT NOT NULL, DepartmentName VARCHAR(255) NOT NULL, FOREIGN KEY (CompanyID) REFERENCES Company(CompanyID) ON DELETE CASCADE)",
+                "CREATE TABLE IF NOT EXISTS Employee (EmployeeID INT AUTO_INCREMENT PRIMARY KEY, CompanyID INT NOT NULL, DepartmentID INT NOT NULL, FirstName VARCHAR(100) NOT NULL, LastName VARCHAR(100) NOT NULL, Email VARCHAR(255) UNIQUE, FOREIGN KEY (CompanyID) REFERENCES Company(CompanyID), FOREIGN KEY (DepartmentID) REFERENCES Department(DepartmentID))",
+                "CREATE TABLE IF NOT EXISTS UserAccount (UserID INT AUTO_INCREMENT PRIMARY KEY, EmployeeID INT, Username VARCHAR(100) UNIQUE NOT NULL, PasswordHash VARCHAR(255) NOT NULL, Role VARCHAR(50) NOT NULL, FOREIGN KEY (EmployeeID) REFERENCES Employee(EmployeeID) ON DELETE SET NULL)",
                 
-                "CREATE TABLE IF NOT EXISTS CarType (CarTypeID INT AUTO_INCREMENT PRIMARY KEY, TypeName VARCHAR(100), Capacity INT)",
-                "CREATE TABLE IF NOT EXISTS FuelType (FuelTypeID INT AUTO_INCREMENT PRIMARY KEY, FuelName VARCHAR(50))",
-                "CREATE TABLE IF NOT EXISTS Car (CarID INT AUTO_INCREMENT PRIMARY KEY, CarTypeID INT, FuelTypeID INT, RegistrationNumber VARCHAR(100) UNIQUE, Make VARCHAR(100), Model VARCHAR(100), ManufacturingYear INT, CurrentStatus VARCHAR(50) DEFAULT 'Available')",
-                "CREATE TABLE IF NOT EXISTS CarFeatures (FeatureID INT AUTO_INCREMENT PRIMARY KEY, CarID INT, FeatureName VARCHAR(255))",
-                "CREATE TABLE IF NOT EXISTS CarInsurance (InsuranceID INT AUTO_INCREMENT PRIMARY KEY, CarID INT, PolicyNumber VARCHAR(100), ExpiryDate DATE)",
-                "CREATE TABLE IF NOT EXISTS CarDocuments (DocumentID INT AUTO_INCREMENT PRIMARY KEY, CarID INT, DocumentType VARCHAR(100), ValidityDate DATE)",
+                "CREATE TABLE IF NOT EXISTS CarType (CarTypeID INT AUTO_INCREMENT PRIMARY KEY, TypeName VARCHAR(100) NOT NULL, Capacity INT NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS FuelType (FuelTypeID INT AUTO_INCREMENT PRIMARY KEY, FuelName VARCHAR(50) NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS Car (CarID INT AUTO_INCREMENT PRIMARY KEY, CarTypeID INT NOT NULL, FuelTypeID INT NOT NULL, RegistrationNumber VARCHAR(100) UNIQUE NOT NULL, Make VARCHAR(100), Model VARCHAR(100), ManufacturingYear INT, CurrentStatus VARCHAR(50) DEFAULT 'Available', FOREIGN KEY (CarTypeID) REFERENCES CarType(CarTypeID), FOREIGN KEY (FuelTypeID) REFERENCES FuelType(FuelTypeID))",
+                "CREATE TABLE IF NOT EXISTS CarFeatures (FeatureID INT AUTO_INCREMENT PRIMARY KEY, CarID INT NOT NULL, FeatureName VARCHAR(255) NOT NULL, FOREIGN KEY (CarID) REFERENCES Car(CarID) ON DELETE CASCADE)",
+                "CREATE TABLE IF NOT EXISTS CarInsurance (InsuranceID INT AUTO_INCREMENT PRIMARY KEY, CarID INT NOT NULL, PolicyNumber VARCHAR(100) UNIQUE NOT NULL, ExpiryDate DATE NOT NULL, FOREIGN KEY (CarID) REFERENCES Car(CarID) ON DELETE CASCADE)",
+                "CREATE TABLE IF NOT EXISTS CarDocuments (DocumentID INT AUTO_INCREMENT PRIMARY KEY, CarID INT NOT NULL, DocumentType VARCHAR(100) NOT NULL, ValidityDate DATE NOT NULL, FOREIGN KEY (CarID) REFERENCES Car(CarID) ON DELETE CASCADE)",
                 
-                "CREATE TABLE IF NOT EXISTS Driver (DriverID INT AUTO_INCREMENT PRIMARY KEY, FirstName VARCHAR(100), LastName VARCHAR(100), Phone VARCHAR(50), LicenseNumber VARCHAR(100) UNIQUE, Status VARCHAR(50))",
-                "CREATE TABLE IF NOT EXISTS DriverDocuments (DocID INT AUTO_INCREMENT PRIMARY KEY, DriverID INT, DocType VARCHAR(100), ExpiryDate DATE)",
-                "CREATE TABLE IF NOT EXISTS DriverShift (ShiftID INT AUTO_INCREMENT PRIMARY KEY, ShiftName VARCHAR(50), StartTime TIME, EndTime TIME)",
-                "CREATE TABLE IF NOT EXISTS DriverAttendance (AttendanceID INT AUTO_INCREMENT PRIMARY KEY, DriverID INT, ShiftID INT, WorkDate DATE, Status VARCHAR(50))",
+                "CREATE TABLE IF NOT EXISTS Driver (DriverID INT AUTO_INCREMENT PRIMARY KEY, FirstName VARCHAR(100) NOT NULL, LastName VARCHAR(100) NOT NULL, Phone VARCHAR(50) UNIQUE NOT NULL, LicenseNumber VARCHAR(100) UNIQUE NOT NULL, Status VARCHAR(50) DEFAULT 'Active')",
+                "CREATE TABLE IF NOT EXISTS DriverDocuments (DocID INT AUTO_INCREMENT PRIMARY KEY, DriverID INT NOT NULL, DocType VARCHAR(100) NOT NULL, ExpiryDate DATE, FOREIGN KEY (DriverID) REFERENCES Driver(DriverID) ON DELETE CASCADE)",
+                "CREATE TABLE IF NOT EXISTS DriverShift (ShiftID INT AUTO_INCREMENT PRIMARY KEY, ShiftName VARCHAR(50) NOT NULL, StartTime TIME NOT NULL, EndTime TIME NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS DriverAttendance (AttendanceID INT AUTO_INCREMENT PRIMARY KEY, DriverID INT NOT NULL, ShiftID INT NOT NULL, WorkDate DATE NOT NULL, Status VARCHAR(50) DEFAULT 'Present', FOREIGN KEY (DriverID) REFERENCES Driver(DriverID), FOREIGN KEY (ShiftID) REFERENCES DriverShift(ShiftID))",
                 
-                "CREATE TABLE IF NOT EXISTS Location (LocationID INT AUTO_INCREMENT PRIMARY KEY, LocationName VARCHAR(255), Address TEXT)",
-                "CREATE TABLE IF NOT EXISTS Route (RouteID INT AUTO_INCREMENT PRIMARY KEY, StartLocationID INT, EndLocationID INT)",
-                "CREATE TABLE IF NOT EXISTS DistanceMatrix (MatrixID INT AUTO_INCREMENT PRIMARY KEY, FromLocationID INT, ToLocationID INT, DistanceKM DECIMAL(10,2))",
+                "CREATE TABLE IF NOT EXISTS Location (LocationID INT AUTO_INCREMENT PRIMARY KEY, LocationName VARCHAR(255) NOT NULL, Address TEXT)",
+                "CREATE TABLE IF NOT EXISTS Route (RouteID INT AUTO_INCREMENT PRIMARY KEY, StartLocationID INT NOT NULL, EndLocationID INT NOT NULL, FOREIGN KEY (StartLocationID) REFERENCES Location(LocationID), FOREIGN KEY (EndLocationID) REFERENCES Location(LocationID))",
+                "CREATE TABLE IF NOT EXISTS DistanceMatrix (MatrixID INT AUTO_INCREMENT PRIMARY KEY, FromLocationID INT NOT NULL, ToLocationID INT NOT NULL, DistanceKM DECIMAL(10,2) NOT NULL, FOREIGN KEY (FromLocationID) REFERENCES Location(LocationID), FOREIGN KEY (ToLocationID) REFERENCES Location(LocationID))",
                 
-                "CREATE TABLE IF NOT EXISTS BookingStatus (StatusID INT AUTO_INCREMENT PRIMARY KEY, StatusName VARCHAR(50) UNIQUE)",
-                "CREATE TABLE IF NOT EXISTS Booking (BookingID INT AUTO_INCREMENT PRIMARY KEY, CompanyID INT, EmployeeID INT, CarTypeID INT, PickupLocationID INT, DropLocationID INT, PickupTime DATETIME, StatusID INT, CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP)",
-                "CREATE TABLE IF NOT EXISTS BookingHistory (HistoryID INT AUTO_INCREMENT PRIMARY KEY, BookingID INT, StatusID INT, ChangeTimestamp DATETIME DEFAULT CURRENT_TIMESTAMP)",
+                "CREATE TABLE IF NOT EXISTS BookingStatus (StatusID INT AUTO_INCREMENT PRIMARY KEY, StatusName VARCHAR(50) UNIQUE NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS Booking (BookingID INT AUTO_INCREMENT PRIMARY KEY, CompanyID INT NOT NULL, EmployeeID INT NOT NULL, CarTypeID INT NOT NULL, PickupLocationID INT NOT NULL, DropLocationID INT NOT NULL, PickupTime DATETIME NOT NULL, StatusID INT NOT NULL, CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (CompanyID) REFERENCES Company(CompanyID), FOREIGN KEY (EmployeeID) REFERENCES Employee(EmployeeID), FOREIGN KEY (CarTypeID) REFERENCES CarType(CarTypeID), FOREIGN KEY (PickupLocationID) REFERENCES Location(LocationID), FOREIGN KEY (DropLocationID) REFERENCES Location(LocationID), FOREIGN KEY (StatusID) REFERENCES BookingStatus(StatusID))",
+                "CREATE TABLE IF NOT EXISTS BookingHistory (HistoryID INT AUTO_INCREMENT PRIMARY KEY, BookingID INT NOT NULL, StatusID INT NOT NULL, ChangeTimestamp DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (BookingID) REFERENCES Booking(BookingID) ON DELETE CASCADE, FOREIGN KEY (StatusID) REFERENCES BookingStatus(StatusID))",
                 
-                "CREATE TABLE IF NOT EXISTS Trip (TripID INT AUTO_INCREMENT PRIMARY KEY, BookingID INT UNIQUE, CarID INT, DriverID INT, StartMeter INT, EndMeter INT, StartTime DATETIME, EndTime DATETIME)",
-                "CREATE TABLE IF NOT EXISTS DriverRating (RatingID INT AUTO_INCREMENT PRIMARY KEY, DriverID INT, TripID INT, Rating INT, Comments TEXT)",
+                "CREATE TABLE IF NOT EXISTS Trip (TripID INT AUTO_INCREMENT PRIMARY KEY, BookingID INT NOT NULL UNIQUE, CarID INT NOT NULL, DriverID INT NOT NULL, StartMeter INT NOT NULL, EndMeter INT, StartTime DATETIME NOT NULL, EndTime DATETIME, FOREIGN KEY (BookingID) REFERENCES Booking(BookingID), FOREIGN KEY (CarID) REFERENCES Car(CarID), FOREIGN KEY (DriverID) REFERENCES Driver(DriverID))",
+                "CREATE TABLE IF NOT EXISTS DriverRating (RatingID INT AUTO_INCREMENT PRIMARY KEY, DriverID INT NOT NULL, TripID INT NOT NULL, Rating INT, Comments TEXT, FOREIGN KEY (DriverID) REFERENCES Driver(DriverID), FOREIGN KEY (TripID) REFERENCES Trip(TripID))",
                 
-                "CREATE TABLE IF NOT EXISTS RateCard (RateID INT AUTO_INCREMENT PRIMARY KEY, CompanyID INT, CarTypeID INT, BaseFare DECIMAL(10,2), PerKmRate DECIMAL(10,2), PerHrRate DECIMAL(10,2))",
-                "CREATE TABLE IF NOT EXISTS Tax (TaxID INT AUTO_INCREMENT PRIMARY KEY, TaxName VARCHAR(50), Percentage DECIMAL(5,2))",
-                "CREATE TABLE IF NOT EXISTS Invoice (InvoiceID INT AUTO_INCREMENT PRIMARY KEY, TripID INT UNIQUE, CompanyID INT, TotalAmount DECIMAL(12,2), InvoiceDate DATETIME DEFAULT CURRENT_TIMESTAMP, Status VARCHAR(50))",
-                "CREATE TABLE IF NOT EXISTS InvoiceDetails (DetailID INT AUTO_INCREMENT PRIMARY KEY, InvoiceID INT, Description VARCHAR(255), Amount DECIMAL(10,2))",
-                "CREATE TABLE IF NOT EXISTS Payment (PaymentID INT AUTO_INCREMENT PRIMARY KEY, InvoiceID INT, AmountPaid DECIMAL(12,2), PaymentMode VARCHAR(50), PaymentDate DATETIME DEFAULT CURRENT_TIMESTAMP)",
+                "CREATE TABLE IF NOT EXISTS RateCard (RateID INT AUTO_INCREMENT PRIMARY KEY, CompanyID INT NOT NULL, CarTypeID INT NOT NULL, BaseFare DECIMAL(10,2) NOT NULL, PerKmRate DECIMAL(10,2) NOT NULL, PerHrRate DECIMAL(10,2) NOT NULL, FOREIGN KEY (CompanyID) REFERENCES Company(CompanyID), FOREIGN KEY (CarTypeID) REFERENCES CarType(CarTypeID))",
+                "CREATE TABLE IF NOT EXISTS Tax (TaxID INT AUTO_INCREMENT PRIMARY KEY, TaxName VARCHAR(50) NOT NULL, Percentage DECIMAL(5,2) NOT NULL)",
+                "CREATE TABLE IF NOT EXISTS Invoice (InvoiceID INT AUTO_INCREMENT PRIMARY KEY, TripID INT NOT NULL UNIQUE, CompanyID INT NOT NULL, TotalAmount DECIMAL(12,2) NOT NULL, InvoiceDate DATETIME DEFAULT CURRENT_TIMESTAMP, Status VARCHAR(50) DEFAULT 'Unpaid', FOREIGN KEY (TripID) REFERENCES Trip(TripID), FOREIGN KEY (CompanyID) REFERENCES Company(CompanyID))",
+                "CREATE TABLE IF NOT EXISTS InvoiceDetails (DetailID INT AUTO_INCREMENT PRIMARY KEY, InvoiceID INT NOT NULL, Description VARCHAR(255) NOT NULL, Amount DECIMAL(10,2) NOT NULL, FOREIGN KEY (InvoiceID) REFERENCES Invoice(InvoiceID) ON DELETE CASCADE)",
+                "CREATE TABLE IF NOT EXISTS Payment (PaymentID INT AUTO_INCREMENT PRIMARY KEY, InvoiceID INT NOT NULL, AmountPaid DECIMAL(12,2) NOT NULL, PaymentMode VARCHAR(50) NOT NULL, PaymentDate DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (InvoiceID) REFERENCES Invoice(InvoiceID))",
                 
-                "CREATE TABLE IF NOT EXISTS FuelLog (LogID INT AUTO_INCREMENT PRIMARY KEY, CarID INT, DriverID INT, Liters DECIMAL(8,2), TotalCost DECIMAL(10,2), Date DATETIME)",
-                "CREATE TABLE IF NOT EXISTS Maintenance (MaintenanceID INT AUTO_INCREMENT PRIMARY KEY, CarID INT, ServiceDate DATE, TotalCost DECIMAL(10,2), Description TEXT)",
-                "CREATE TABLE IF NOT EXISTS BreakdownLog (BreakdownID INT AUTO_INCREMENT PRIMARY KEY, CarID INT, TripID INT, Description TEXT, BreakdownDate DATETIME)"
+                "CREATE TABLE IF NOT EXISTS FuelLog (LogID INT AUTO_INCREMENT PRIMARY KEY, CarID INT NOT NULL, DriverID INT NOT NULL, Liters DECIMAL(8,2) NOT NULL, TotalCost DECIMAL(10,2) NOT NULL, Date DATETIME, FOREIGN KEY (CarID) REFERENCES Car(CarID), FOREIGN KEY (DriverID) REFERENCES Driver(DriverID))",
+                "CREATE TABLE IF NOT EXISTS Maintenance (MaintenanceID INT AUTO_INCREMENT PRIMARY KEY, CarID INT NOT NULL, ServiceDate DATE NOT NULL, TotalCost DECIMAL(10,2) NOT NULL, Description TEXT, FOREIGN KEY (CarID) REFERENCES Car(CarID))",
+                "CREATE TABLE IF NOT EXISTS BreakdownLog (BreakdownID INT AUTO_INCREMENT PRIMARY KEY, CarID INT NOT NULL, TripID INT, Description TEXT NOT NULL, BreakdownDate DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (CarID) REFERENCES Car(CarID), FOREIGN KEY (TripID) REFERENCES Trip(TripID))"
             };
 
             for (String sql : tables) { stmt.execute(sql); }
+            stmt.execute("SET FOREIGN_KEY_CHECKS = 1");
             autoSeedDatabase();
         } catch (SQLException e) { showAlert("DB Init Error", e.getMessage()); }
     }
@@ -180,11 +184,11 @@ public class App extends Application {
                 stmt.execute("INSERT INTO DriverShift (ShiftName, StartTime, EndTime) VALUES ('Morning', '08:00:00', '16:00:00'), ('Night', '20:00:00', '04:00:00')");
                 
                 // Entities
-                stmt.execute("INSERT INTO Company (CompanyName, ContactPerson, ContactEmail) VALUES ('TechCorp', 'John', 'john@tech.com'), ('Acme Corp', 'Jane', 'jane@acme.com')");
+                stmt.execute("INSERT INTO Company (CompanyName, ContactPerson, ContactEmail, ContactPhone, BillingAddress) VALUES ('TechCorp', 'John', 'john@tech.com', '1234567890', 'NY'), ('Acme Corp', 'Jane', 'jane@acme.com', '0987654321', 'NJ')");
                 stmt.execute("INSERT INTO Department (CompanyID, DepartmentName) VALUES (1, 'IT'), (2, 'Operations')");
                 stmt.execute("INSERT INTO Employee (CompanyID, DepartmentID, FirstName, LastName, Email) VALUES (1, 1, 'Alice', 'Smith', 'alice@tech.com'), (2, 2, 'Bob', 'Jones', 'bob@acme.com')");
                 stmt.execute("INSERT INTO Car (CarTypeID, FuelTypeID, RegistrationNumber, Make, Model, CurrentStatus) VALUES (2, 2, 'KA-01-AB-1234', 'Toyota', 'Innova', 'Available'), (1, 1, 'MH-12-XY-9876', 'Honda', 'City', 'Available')");
-                stmt.execute("INSERT INTO Driver (FirstName, LastName, LicenseNumber, Status) VALUES ('Ramesh', 'Kumar', 'DL-123', 'Active'), ('Suresh', 'Singh', 'DL-456', 'Active')");
+                stmt.execute("INSERT INTO Driver (FirstName, LastName, Phone, LicenseNumber, Status) VALUES ('Ramesh', 'Kumar', '9876543210', 'DL-123', 'Active'), ('Suresh', 'Singh', '9123456780', 'DL-456', 'Active')");
                 stmt.execute("INSERT INTO RateCard (CompanyID, CarTypeID, BaseFare, PerKmRate, PerHrRate) VALUES (1, 2, 1800, 15, 100), (2, 1, 1200, 12, 80)");
             }
         } catch (Exception e) { System.out.println("Auto-seed skipped: " + e.getMessage()); }
@@ -264,7 +268,7 @@ public class App extends Application {
     }
 
     private int fetchId(String table, String idCol, String nameCol, String nameVal) {
-        if (nameVal == null || nameVal.trim().isEmpty()) return -1;
+        if (nameVal == null || nameVal.trim().isEmpty() || nameVal.equals("-1")) return -1;
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement("SELECT " + idCol + " FROM " + table + " WHERE " + nameCol + " = ? LIMIT 1")) {
             ps.setString(1, nameVal);
             ResultSet rs = ps.executeQuery();
@@ -274,7 +278,7 @@ public class App extends Application {
     }
     
     private String fetchName(String table, String displayCol, String idCol, String idVal) {
-        if (idVal == null || idVal.isEmpty()) return null;
+        if (idVal == null || idVal.isEmpty() || idVal.equals("-1")) return null;
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement("SELECT " + displayCol + " FROM " + table + " WHERE " + idCol + " = ? LIMIT 1")) {
             ps.setString(1, idVal);
             ResultSet rs = ps.executeQuery();
@@ -291,12 +295,11 @@ public class App extends Application {
         return list;
     }
 
-    private void resequenceTable(String tableName, String pkCol) {
+    private void safeResetAutoIncrement(String tableName) {
         try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
-            stmt.execute("SET @count = 0");
-            stmt.execute("UPDATE " + tableName + " SET " + pkCol + " = @count:= @count + 1");
+            // Safely resets the auto increment to the lowest available boundary without forcefully changing existing relational mappings.
             stmt.execute("ALTER TABLE " + tableName + " AUTO_INCREMENT = 1");
-        } catch (SQLException ex) { System.out.println("Resequence error: " + ex.getMessage()); }
+        } catch (SQLException ex) { System.out.println("Auto-Increment Reset error: " + ex.getMessage()); }
         loadAllDataFromDB(); updateDashboardStats();
     }
     
@@ -446,7 +449,7 @@ public class App extends Application {
         addBtn.setOnAction(e -> {
             try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Company (CompanyName, ContactPerson, ContactEmail, ContactPhone, BillingAddress) VALUES (?,?,?,?,?)")) {
                 pstmt.setString(1, nameIn.getText()); pstmt.setString(2, contactIn.getText()); pstmt.setString(3, emailIn.getText()); pstmt.setString(4, phoneIn.getText()); pstmt.setString(5, addressIn.getText());
-                pstmt.executeUpdate(); resequenceTable("Company", "CompanyID"); nameIn.clear(); contactIn.clear(); emailIn.clear();
+                pstmt.executeUpdate(); safeResetAutoIncrement("Company"); nameIn.clear(); contactIn.clear(); emailIn.clear();
             } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
         });
         
@@ -454,7 +457,7 @@ public class App extends Application {
             Company sel = table.getSelectionModel().getSelectedItem();
             if(sel != null && confirmDelete()) {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM Company WHERE CompanyID=?")) {
-                    pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate(); resequenceTable("Company", "CompanyID");
+                    pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate(); safeResetAutoIncrement("Company");
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
         });
@@ -493,7 +496,7 @@ public class App extends Application {
             int fuelId = fetchId("FuelType", "FuelTypeID", "FuelName", fuelIn.getValue());
             try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Car (CarTypeID, FuelTypeID, RegistrationNumber, Make, Model, CurrentStatus) VALUES (?,?,?,?,?,?)")) {
                 pstmt.setInt(1, typeId); pstmt.setInt(2, fuelId); pstmt.setString(3, regIn.getText().toUpperCase()); pstmt.setString(4, makeIn.getText()); pstmt.setString(5, modelIn.getText()); pstmt.setString(6, statusIn.getValue());
-                pstmt.executeUpdate(); resequenceTable("Car", "CarID"); regIn.clear(); makeIn.clear(); modelIn.clear();
+                pstmt.executeUpdate(); safeResetAutoIncrement("Car"); regIn.clear(); makeIn.clear(); modelIn.clear();
             } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
         });
         
@@ -501,7 +504,7 @@ public class App extends Application {
             Car sel = table.getSelectionModel().getSelectedItem();
             if(sel != null && confirmDelete()) {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM Car WHERE CarID=?")) {
-                    pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate(); resequenceTable("Car", "CarID");
+                    pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate(); safeResetAutoIncrement("Car");
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
         });
@@ -533,7 +536,7 @@ public class App extends Application {
         addBtn.setOnAction(e -> {
             try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Driver (FirstName, LastName, Phone, LicenseNumber, Status) VALUES (?,?,?,?,?)")) {
                 pstmt.setString(1, fNameIn.getText()); pstmt.setString(2, lNameIn.getText()); pstmt.setString(3, phoneIn.getText()); pstmt.setString(4, licIn.getText()); pstmt.setString(5, statusIn.getValue());
-                pstmt.executeUpdate(); resequenceTable("Driver", "DriverID"); fNameIn.clear(); lNameIn.clear(); phoneIn.clear(); licIn.clear();
+                pstmt.executeUpdate(); safeResetAutoIncrement("Driver"); fNameIn.clear(); lNameIn.clear(); phoneIn.clear(); licIn.clear();
             } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
         });
         
@@ -541,7 +544,7 @@ public class App extends Application {
             Driver sel = table.getSelectionModel().getSelectedItem();
             if(sel != null && confirmDelete()) {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM Driver WHERE DriverID=?")) {
-                    pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate(); resequenceTable("Driver", "DriverID");
+                    pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate(); safeResetAutoIncrement("Driver");
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
         });
@@ -554,8 +557,8 @@ public class App extends Application {
         TableView<Booking> table = new TableView<>(bookingData);
         table.getColumns().addAll(
             createCol("BKG ID", "id", 60), createCol("Company", "company", 130), 
-            createCol("Employee", "employee", 100), createCol("Pickup", "pickup", 120), 
-            createCol("Drop", "dropLoc", 120), createCol("Status", "status", 90)
+            createCol("Employee", "employee", 100), createCol("Car Type", "carType", 120),
+            createCol("Pickup Loc", "pickup", 120), createCol("Status", "status", 90)
         );
         VBox.setVgrow(table, Priority.ALWAYS);
 
@@ -597,7 +600,6 @@ public class App extends Application {
         table.getSelectionModel().selectedItemProperty().addListener((obs, old, newSel) -> {
             if(newSel != null) { 
                 compIn.setValue(newSel.getCompany()); 
-                // Employee combo populates via listener, so we just set value safely
                 empIn.getItems().stream().filter(item -> item.contains(newSel.getEmployee())).findFirst().ifPresent(empIn::setValue);
                 statusIn.setValue(newSel.getStatus());
                 
@@ -609,7 +611,6 @@ public class App extends Application {
         addBtn.setOnAction(e -> {
             int compId = fetchId("Company", "CompanyID", "CompanyName", compIn.getValue());
             
-            // Safe reverse parse for cascading employee dropdown
             String empStr = empIn.getValue();
             String empEmail = empStr != null && empStr.contains("[") ? empStr.substring(empStr.indexOf("[") + 1, empStr.indexOf("]")) : "";
             int empId = fetchId("Employee", "EmployeeID", "Email", empEmail);
@@ -618,6 +619,11 @@ public class App extends Application {
             int pickId = fetchId("Location", "LocationID", "LocationName", pickupIn.getValue());
             int dropId = fetchId("Location", "LocationID", "LocationName", dropIn.getValue());
             int statId = fetchId("BookingStatus", "StatusID", "StatusName", statusIn.getValue());
+            
+            if (compId == -1 || empId == -1 || typeId == -1 || pickId == -1 || dropId == -1 || statId == -1) {
+                showAlert("Validation Error", "Please completely select all dropdowns to create a strict relational booking.");
+                return;
+            }
             
             try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO Booking (CompanyID, EmployeeID, CarTypeID, PickupLocationID, DropLocationID, PickupTime, StatusID) VALUES (?,?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS)) {
                 pstmt.setInt(1, compId); pstmt.setInt(2, empId); pstmt.setInt(3, typeId); pstmt.setInt(4, pickId); pstmt.setInt(5, dropId); pstmt.setString(6, timeIn.getText()); pstmt.setInt(7, statId);
@@ -629,7 +635,7 @@ public class App extends Application {
                         psHist.setInt(1, rs.getInt(1)); psHist.setInt(2, statId); psHist.executeUpdate();
                     }
                 }
-                resequenceTable("Booking", "BookingID");
+                safeResetAutoIncrement("Booking");
             } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
         });
 
@@ -638,12 +644,10 @@ public class App extends Application {
             if(sel != null && carAssignIn.getValue() != null && driverAssignIn.getValue() != null) {
                 int bkgId = Integer.parseInt(sel.getId());
                 
-                // Safe reverse parse for smart vehicle dropdown
                 String carStr = carAssignIn.getValue();
                 String regNo = carStr.contains(" - ") ? carStr.split(" - ")[0] : carStr;
                 int carId = fetchId("Car", "CarID", "RegistrationNumber", regNo);
                 
-                // Safe reverse parse for smart driver dropdown
                 String drvStr = driverAssignIn.getValue();
                 String drvLic = drvStr.contains("[") ? drvStr.substring(drvStr.indexOf("[") + 1, drvStr.indexOf("]")) : "";
                 int driverId = fetchId("Driver", "DriverID", "LicenseNumber", drvLic);
@@ -663,7 +667,7 @@ public class App extends Application {
                     PreparedStatement p4 = conn.prepareStatement("UPDATE Car SET CurrentStatus='On Trip' WHERE CarID=?");
                     p4.setInt(1, carId); p4.executeUpdate();
                     
-                    resequenceTable("Trip", "TripID");
+                    safeResetAutoIncrement("Trip");
                     showAlert("Dispatch Success", "Trip created successfully! Vehicle and Driver allocated.");
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
@@ -673,7 +677,7 @@ public class App extends Application {
             Booking sel = table.getSelectionModel().getSelectedItem();
             if(sel != null && confirmDelete()) {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM Booking WHERE BookingID=?")) {
-                    pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate(); resequenceTable("Booking", "BookingID"); table.getSelectionModel().clearSelection();
+                    pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate(); safeResetAutoIncrement("Booking"); table.getSelectionModel().clearSelection();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
         });
@@ -694,7 +698,6 @@ public class App extends Application {
 
         GridPane form = new GridPane(); form.setHgap(10); form.setVgap(10); form.setStyle("-fx-background-color: white; -fx-padding: 15; -fx-background-radius: 5;");
         
-        // 💡 SMART LOOKUP DROPDOWNS
         ComboBox<String> compIn = new ComboBox<>(fetchList("SELECT CompanyName FROM Company"));
         ComboBox<String> typeIn = new ComboBox<>(fetchList("SELECT TypeName FROM CarType"));
         TextField baseFareIn = new TextField(); TextField perKmIn = new TextField(); TextField perHrIn = new TextField();
@@ -719,7 +722,7 @@ public class App extends Application {
             int typeId = fetchId("CarType", "CarTypeID", "TypeName", typeIn.getValue());
             try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("INSERT INTO RateCard (CompanyID, CarTypeID, BaseFare, PerKmRate, PerHrRate) VALUES (?,?,?,?,?)")) {
                 pstmt.setInt(1, compId); pstmt.setInt(2, typeId); pstmt.setString(3, baseFareIn.getText()); pstmt.setString(4, perKmIn.getText()); pstmt.setString(5, perHrIn.getText());
-                pstmt.executeUpdate(); resequenceTable("RateCard", "RateID");
+                pstmt.executeUpdate(); safeResetAutoIncrement("RateCard");
                 baseFareIn.clear(); perKmIn.clear(); perHrIn.clear();
             } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
         });
@@ -728,7 +731,7 @@ public class App extends Application {
             RateCard sel = table.getSelectionModel().getSelectedItem();
             if(sel != null && confirmDelete()) {
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM RateCard WHERE RateID=?")) {
-                    pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate(); resequenceTable("RateCard", "RateID"); table.getSelectionModel().clearSelection();
+                    pstmt.setInt(1, Integer.parseInt(sel.getId())); pstmt.executeUpdate(); safeResetAutoIncrement("RateCard"); table.getSelectionModel().clearSelection();
                     baseFareIn.clear(); perKmIn.clear(); perHrIn.clear();
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
@@ -749,10 +752,9 @@ public class App extends Application {
 
         GridPane form = new GridPane(); form.setHgap(10); form.setVgap(10); form.setStyle("-fx-background-color: white; -fx-padding: 15; -fx-background-radius: 5;");
         
-        // 💡 SMART BILLING DROPDOWNS
         ComboBox<String> tripIn = new ComboBox<>(fetchList("SELECT CONCAT('Trip #', TripID, ' (BKG-', BookingID, ')') FROM Trip WHERE TripID NOT IN (SELECT TripID FROM Invoice)"));
         ComboBox<String> taxIn = new ComboBox<>(fetchList("SELECT CONCAT(TaxName, ' (', Percentage, '%)') FROM Tax"));
-        taxIn.getSelectionModel().selectFirst(); // Auto-select first tax
+        taxIn.getSelectionModel().selectFirst(); 
         
         TextField distanceIn = new TextField(); TextField baseFareIn = new TextField(); 
         TextField extraKmRateIn = new TextField(); extraKmRateIn.setEditable(false); 
@@ -836,7 +838,7 @@ public class App extends Application {
                         p3.setInt(1, invId); p3.setString(2, String.valueOf(total)); p3.setString(3, payModeIn.getValue()); p3.executeUpdate();
                     }
                     
-                    resequenceTable("Invoice", "InvoiceID");
+                    safeResetAutoIncrement("Invoice");
                     showAlert("Success", "Cascaded Billing Complete! Invoice Details and Payment tables updated. Total: ₹" + String.format("%.2f", total));
                     tripIn.setItems(fetchList("SELECT CONCAT('Trip #', TripID, ' (BKG-', BookingID, ')') FROM Trip WHERE TripID NOT IN (SELECT TripID FROM Invoice)"));
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
@@ -891,7 +893,8 @@ public class App extends Application {
                 if (c instanceof ComboBox) {
                     String displayValue = (String) ((ComboBox<?>)c).getValue();
                     if (displayValue != null && fk != null) {
-                        val = String.valueOf(fetchId(fk.refTable, fk.refIdCol, fk.refDisplayCol, displayValue));
+                        int fkId = fetchId(fk.refTable, fk.refIdCol, fk.refDisplayCol, displayValue);
+                        val = fkId != -1 ? String.valueOf(fkId) : null;
                     }
                 } else {
                     val = ((TextField)c).getText();
@@ -906,9 +909,15 @@ public class App extends Application {
             sql.append(placeholders.toString());
             
             try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql.toString())) {
-                for (int i=0; i<insertVals.size(); i++) pstmt.setString(i+1, insertVals.get(i));
+                for (int i=0; i<insertVals.size(); i++) {
+                    if (insertVals.get(i) == null || insertVals.get(i).trim().isEmpty()) {
+                        pstmt.setNull(i+1, Types.INTEGER); // Handling optional FK mappings elegantly
+                    } else {
+                        pstmt.setString(i+1, insertVals.get(i));
+                    }
+                }
                 pstmt.executeUpdate(); 
-                resequenceTable(tName, currentDynamicColumns.get(0));
+                safeResetAutoIncrement(tName);
                 loadDynamicTable(tName, dynamicTable, dynamicForm, deleteBtn, addBtn);
             } catch(SQLException ex) { showAlert("DB Error", ex.getMessage()); }
         });
@@ -920,7 +929,7 @@ public class App extends Application {
                 String pkCol = currentDynamicColumns.get(0);
                 try (Connection conn = getConnection(); PreparedStatement pstmt = conn.prepareStatement("DELETE FROM " + tName + " WHERE " + pkCol + "=?")) {
                     pstmt.setInt(1, Integer.parseInt(sel.get(0))); pstmt.executeUpdate(); 
-                    resequenceTable(tName, pkCol);
+                    safeResetAutoIncrement(tName);
                     loadDynamicTable(tName, dynamicTable, dynamicForm, deleteBtn, addBtn);
                 } catch (SQLException ex) { showAlert("DB Error", ex.getMessage()); }
             }
@@ -969,7 +978,7 @@ public class App extends Application {
                 table.getColumns().add(col);
                 
                 // Form Builder
-                if (i == 1 || colName.equalsIgnoreCase(tableName + "ID")) {
+                if (i == 1 || colName.equalsIgnoreCase(tableName + "ID") || colName.equalsIgnoreCase("id")) {
                     currentDynamicFields.add(null); // PK placeholder
                 } else {
                     VBox fieldBox = new VBox(2); 
@@ -1048,9 +1057,9 @@ public class App extends Application {
         public String getId() { return id.get(); } public String getFirstName() { return firstName.get(); } public String getLicense() { return license.get(); } public String getStatus() { return status.get(); }
     }
     public static class Booking {
-        private final SimpleStringProperty id, company, employee, serviceType, pickup, dropLoc, time, status;
-        public Booking(String id, String company, String employee, String serviceType, String pickup, String dropLoc, String time, String status) { this.id = new SimpleStringProperty(id); this.company = new SimpleStringProperty(company); this.employee = new SimpleStringProperty(employee); this.serviceType = new SimpleStringProperty(serviceType); this.pickup = new SimpleStringProperty(pickup); this.dropLoc = new SimpleStringProperty(dropLoc); this.time = new SimpleStringProperty(time); this.status = new SimpleStringProperty(status); }
-        public String getId() { return id.get(); } public String getCompany() { return company.get(); } public String getEmployee() { return employee.get(); } public String getServiceType() { return serviceType.get(); } public String getPickup() { return pickup.get(); } public String getDropLoc() { return dropLoc.get(); } public String getTime() { return time.get(); } public String getStatus() { return status.get(); }
+        private final SimpleStringProperty id, company, employee, carType, pickup, dropLoc, time, status;
+        public Booking(String id, String company, String employee, String carType, String pickup, String dropLoc, String time, String status) { this.id = new SimpleStringProperty(id); this.company = new SimpleStringProperty(company); this.employee = new SimpleStringProperty(employee); this.carType = new SimpleStringProperty(carType); this.pickup = new SimpleStringProperty(pickup); this.dropLoc = new SimpleStringProperty(dropLoc); this.time = new SimpleStringProperty(time); this.status = new SimpleStringProperty(status); }
+        public String getId() { return id.get(); } public String getCompany() { return company.get(); } public String getEmployee() { return employee.get(); } public String getCarType() { return carType.get(); } public String getPickup() { return pickup.get(); } public String getDropLoc() { return dropLoc.get(); } public String getTime() { return time.get(); } public String getStatus() { return status.get(); }
     }
     public static class RateCard {
         private final SimpleStringProperty id, company, carType, baseFare, perKmRate, perHrRate;
